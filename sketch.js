@@ -49,7 +49,7 @@ let player = {
   y: 1,
   r: 22,
   blobT: 0,
-  direction: { x: 0, y: -1 }, 
+  direction: { x: 0, y: -1 },
   shootTimer: 0,
   health: 5,
   maxHealth: 5,
@@ -93,7 +93,6 @@ let nextWave = 0;
 let boss = null;
 let bossData = null;
 const BOSS_ZONE_Y = 300; // world Y — enter this zone to trigger boss
-
 
 // ------------------------------------------------------------
 // MINIMAP
@@ -192,25 +191,24 @@ function draw() {
   if (gameState === STATE_PLAY) {
     handleInput();
     applyBounce();
-    
+
     drawObstacles();
     drawTiles();
-   
+
     drawPlayer();
   } else if (gameState === STATE_BOSS) {
     handleInput();
     applyBounce();
-    
+
     drawObstacles();
     drawTiles();
-    
+
     drawPlayer();
   }
 
   pop(); // restore screen coordinates
 
   drawMinimap();
-
 }
 
 // ------------------------------------------------------------
@@ -230,41 +228,42 @@ function updateCamera() {
 }
 
 function drawTiles() {
-  for (let i = 0; i < tiles.length; i++) {
-    let t = tiles[i];
+  const layers = tileData.layers; // there are 2 layers for now
+  for (let l = layers.length - 1; l > -1; l--) { // for each layer
+    for (let i = 0; i < layers[l].tiles.length; i++) {
+      let t = layers[l].tiles[i];
 
-    push();
+      push();
 
-    let x = t.x * TILE_SIZE;
-    let y = t.y * TILE_SIZE;
-    if (t.id === "0") {
-      fill("blue");
-    } else if (t.id === "1") {
-      fill("white");
-    } else if (t.id === "2") {
-      fill("yellow");
+      let x = t.x * TILE_SIZE;
+      let y = t.y * TILE_SIZE;
+      if (t.id === "0") {
+        fill("blue");
+      } else if (t.id === "1") {
+        fill("white");
+      } else if (t.id === "2") {
+        fill("yellow");
       } else if (t.id === "3") { // for the real json file
-      fill("orange");
+        fill("orange");
       } else if (t.id === "4") {
-      fill("red");
+        fill("red");
       } else if (t.id === "5") {
-      fill("purple");
+        fill("purple");
       } else if (t.id === "6") {
-      fill("red");
+        fill("red");
       } else if (t.id === "7") {
-        fill("blue")
-        } else if (t.id === "8") {
-      fill("light grey");
+        fill("blue");
+      } else if (t.id === "8") {
+        fill("light grey");
       } else if (t.id === "9") {
-      fill("light blue");
-    } else {
-      fill("green");
+        fill("light blue");
+      } else {
+        fill("green");
+      }
+      rect(x, y, TILE_SIZE, TILE_SIZE);
+
+      pop();
     }
-    rect(x, y, TILE_SIZE, TILE_SIZE);
-
-    pop();
-
-
   }
 }
 
@@ -391,7 +390,6 @@ function applyBounce() {
 // ------------------------------------------------------------
 function drawBackground() {
   noStroke();
-  
 
   // World boundary outline
   noFill();
@@ -400,7 +398,6 @@ function drawBackground() {
   rect(0, 0, WORLD_W, WORLD_H);
   noStroke();
 }
-
 
 // ------------------------------------------------------------
 // handleInput()
@@ -554,8 +551,6 @@ function drawMinimap() {
   textFont("monospace");
   text("MAP", mapX + 4, mapY + MAP_H - 4);
 }
-
-
 
 // ------------------------------------------------------------
 // keyPressed()
