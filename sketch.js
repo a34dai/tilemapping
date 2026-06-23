@@ -1,6 +1,4 @@
 // ============================================================
-// Week 6 Example 2 — Free Roam Top-Down with Boss Battle
-// ============================================================
 // The player moves freely around a world larger than the canvas.
 // A smooth-follow camera keeps the player centred.
 // Enemy waves are loaded from JSON and chase the player.
@@ -35,16 +33,33 @@ let moveSpeed = PLAYER_SPEED;
 const INVINCIBLE_FRAMES = 90; // ADDED — was referenced but never defined
 
 // ------------------------------------------------------------
-// PLAYER
-// Position is in world coordinates.
-// Starts near the bottom centre of the world.
+// FISH SPRITE CONFIGURATION
 // ------------------------------------------------------------
+const FISH_SPRITE = {
+  frameWidth: 0, // Calculated dynamically in setup() to avoid grid bleed
+  frameHeight: 0, // Calculated dynamically in setup()
+  numFrames: 2, // Each row contains 2 frames for the swim animation
+  animSpeed: 12, // Controls tail wag speed (lower = faster)
+  scale: 0.15, // Scale factor to map image size nicely to player.r (22px)
+
+  // Row mapping: row 0 is left, row 1 is right
+  rows: {
+    left: 1,
+    right: 0,
+  },
+};
+
 let player = {
   x: 15000,
   y: 3000,
   r: 22,
-  blobT: 0,
-  direction: { x: 0, y: -1 },
+
+  // Animation state variables
+  currentFrame: 0,
+  frameTimer: 0,
+  facing: "left", // Current look direction ("left" or "right")
+  isMoving: false, // Tracks whether player is currently moving to trigger animation
+
   shootTimer: 0,
   health: 5,
   maxHealth: 5,
@@ -83,7 +98,8 @@ let spike2Img;
 let spike3Img;
 let spike4Img;
 let fishareaBG;
-
+let fishareaOverlay;
+let fishSheet; //fish sprite sheet
 let fishArea;
 
 // ------------------------------------------------------------
@@ -169,6 +185,7 @@ function preload() {
   obstacleData = loadJSON("data/obstacles.json");
   tileData = loadJSON("data/map.json");
   fishArea = loadJSON("data/fisharea.json");
+  fishSheet = loadImage("assets/fish.png");
   seaweedImg = loadImage("assets/seaweed.png");
   sandImg = loadImage("assets/sand.png");
   sandrockImg = loadImage("assets/sandrock.png");
@@ -178,6 +195,7 @@ function preload() {
   spike3Img = loadImage("assets/spike3.png");
   spike4Img = loadImage("assets/spike4.png");
   fishareaBG = loadImage("assets/fishareaBG.png");
+  fishareaOverlay = loadImage("assets/fishareaoverlay.png");
 
   // Uncomment to load sounds:
   // shootSound     = loadSound("assets/sounds/shoot.wav");
@@ -202,6 +220,9 @@ function setup() {
   console.log("tileData=", tileData);
   console.log("obstacleData=", obstacleData);
 
+  FISH_SPRITE.frameWidth = fishSheet.width / 2;
+  FISH_SPRITE.frameHeight = fishSheet.height / 2;
+
   // Build obstacle objects from JSON
   for (let i = 0; i < obstacleData.obstacles.length; i++) {
     let o = obstacleData.obstacles[i];
@@ -225,7 +246,7 @@ function setup() {
   // Start camera so player is visible
   camX = player.x - width / 2;
   camY = player.y - height / 2;
-
+  imageMode(CORNER);
   // Uncomment to start music:
   // music.loop();
 }
@@ -259,6 +280,7 @@ function draw() {
   if (gameState === STATE_PLAY) {
     updateMoveSpeed();
     handleInput();
+    animateFish();
     applyBounce();
 
     // ADDED — tile physics: solid blockage, hazards, checkpoints
@@ -273,12 +295,37 @@ function draw() {
     drawTiles(tileData);
 
     drawPlayer();
+
+    // ADDED: draw fish area overlay on top of everything (world coordinates)
+    if (fishareaOverlay) {
+      const fishAreaOffsetX = TILE_SIZE * (tileData.mapWidth - 33);
+      const fishAreaOffsetY = TILE_SIZE * tileData.mapHeight;
+      image(fishareaOverlay, fishAreaOffsetX, fishAreaOffsetY, 1900, 800);
+    }
   }
 
   pop(); // restore screen coordinates
 
   drawMinimap();
 }
+
+// ------------------------------------------------------------
+// animateFish() — Cycles active frames when velocity is detected
+// ------------------------------------------------------------
+function animateFish() {
+  if (player.isMoving) {
+    player.frameTimer++;
+    if (player.frameTimer >= FISH_SPRITE.animSpeed) {
+      player.frameTimer = 0;
+      player.currentFrame = (player.currentFrame + 1) % FISH_SPRITE.numFrames;
+    }
+  } else {
+    // Revert to frame 0 when key inputs are idle
+    player.currentFrame = 0;
+    player.frameTimer = 0;
+  }
+}
+
 // ------------------------------------------------------------
 // updateCamera()
 // Smoothly moves the camera toward the player each frame.
@@ -331,7 +378,7 @@ function processJsonLayers(
   checkpointTiles,
   coinTiles,
   offsetX = 0,
-  offsetY = 0,
+  offsetY = 0
 ) {
   if (!jsonFile || !jsonFile.layers) return;
 
@@ -402,7 +449,7 @@ function buildTileCollision() {
     checkpointTiles,
     coinTiles,
     fishAreaOffsetX,
-    fishAreaOffsetY,
+    fishAreaOffsetY
   );
 
   function playerInWater() {
@@ -833,7 +880,9 @@ function drawTiles(jsonFile) {
     if (layer.name === "water") continue; // skip water, already drawn
     let spikePositions = null;
     if (jsonFile === tileData && layer.name === "spikes") {
-      spikePositions = new Set(layer.tiles.map((tile) => `${tile.x},${tile.y}`));
+      spikePositions = new Set(
+        layer.tiles.map((tile) => `${tile.x},${tile.y}`)
+      );
     }
     for (let i = 0; i < layer.tiles.length; i++) {
       let t = layer.tiles[i];
@@ -1105,25 +1154,35 @@ function drawBackground() {
 // Constrained to world boundaries.
 // Spacebar fires in the current facing direction.
 // ------------------------------------------------------------
+// ------------------------------------------------------------
+// handleInput() — Updates player position and tracking direction
+// ------------------------------------------------------------
 function handleInput() {
+  player.isMoving = false; // Reset velocity indicator by default
+
   if (keyIsDown(87)) {
+    // W - Up
     player.y -= moveSpeed;
-    player.direction = { x: 0, y: -1 };
+    player.isMoving = true;
   }
   if (keyIsDown(83)) {
+    // S - Down
     player.y += moveSpeed;
-    player.direction = { x: 0, y: 1 };
+    player.isMoving = true;
   }
   if (keyIsDown(65)) {
+    // A - Left
     player.x -= moveSpeed;
-    player.direction = { x: -1, y: 0 };
+    player.facing = "left"; // Point source coordinate calculation to Row 0
+    player.isMoving = true;
   }
   if (keyIsDown(68)) {
+    // D - Right
     player.x += moveSpeed;
-    player.direction = { x: 1, y: 0 };
+    player.facing = "right"; // Point source coordinate calculation to Row 1
+    player.isMoving = true;
   }
 
-  // Keep player inside world bounds
   player.x = constrain(player.x, player.r, WORLD_W - player.r);
   player.y = constrain(player.y, player.r, WORLD_H - player.r);
 }
@@ -1156,29 +1215,29 @@ function updateBullets() {
 function drawPlayer() {
   if (player.invincible && floor(player.invincibleTimer / 6) % 2 === 0) return;
 
+  let row = FISH_SPRITE.rows[player.facing];
+
+  let sx = player.currentFrame * FISH_SPRITE.frameWidth;
+  let sy = row * FISH_SPRITE.frameHeight;
+
+  let dw = FISH_SPRITE.frameWidth * FISH_SPRITE.scale;
+  let dh = FISH_SPRITE.frameHeight * FISH_SPRITE.scale;
+
   push();
-  fill(0, 200, 180);
-  noStroke();
-
-  beginShape();
-  let numPoints = 48;
-  for (let i = 0; i < numPoints; i++) {
-    let angle = (TWO_PI / numPoints) * i;
-    let noiseVal = noise(
-      cos(angle) * 0.8 + player.blobT,
-      sin(angle) * 0.8 + player.blobT,
-    );
-    let r = player.r + map(noiseVal, 0, 1, -6, 6);
-    vertex(player.x + cos(angle) * r, player.y + sin(angle) * r);
-  }
-  endShape(CLOSE);
-
-  fill(10);
-  ellipse(player.x - 7, player.y - 5, 7, 7);
-  ellipse(player.x + 7, player.y - 5, 7, 7);
-
-  pop();
-  player.blobT += 0.015;
+  // Temporarily switch to CENTER mode just for the player, then restore it
+  imageMode(CENTER);
+  image(
+    fishSheet,
+    player.x,
+    player.y,
+    dw,
+    dh,
+    sx,
+    sy,
+    FISH_SPRITE.frameWidth,
+    FISH_SPRITE.frameHeight
+  );
+  pop(); // Restores imageMode back to CORNER for everything else
 }
 
 // ------------------------------------------------------------
