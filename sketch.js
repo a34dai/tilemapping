@@ -49,6 +49,26 @@ const FISH_SPRITE = {
   },
 };
 
+const BIRD_SPRITE = {
+  frameWidth: 500,
+  frameHeight: 500,
+  animSpeed: 10,
+  scale: 0.15, // Adjusted to match your game's world scale (~same size as fish)
+
+  rows: {
+    flying: 0,
+    running: 1,
+  },
+  maxFrames: {
+    flying: 4,
+    running: 7,
+  },
+};
+
+const GRAVITY = 3.0; // Calibrated downward pull
+const FLAP_FORCE = -24; // Gives the exact velocity curve to hit 3 blocks high
+const TERMINAL_VELOCITY = 20;
+
 let player = {
   x: 15000,
   y: 3000,
@@ -101,6 +121,7 @@ let fishareaBG;
 let fishareaOverlay;
 let fishSheet; //fish sprite sheet
 let fishArea;
+let birdSheet; //bird sprite sheet
 
 // ------------------------------------------------------------
 // ADDED — TILE PHYSICS
@@ -185,6 +206,7 @@ function preload() {
   obstacleData = loadJSON("data/obstacles.json");
   tileData = loadJSON("data/map.json");
   fishArea = loadJSON("data/fisharea.json");
+
   fishSheet = loadImage("assets/fish.png");
   seaweedImg = loadImage("assets/seaweed.png");
   sandImg = loadImage("assets/sand.png");
@@ -196,6 +218,7 @@ function preload() {
   spike4Img = loadImage("assets/spike4.png");
   fishareaBG = loadImage("assets/fishareaBG.png");
   fishareaOverlay = loadImage("assets/fishareaoverlay.png");
+  birdSheet = loadImage("assets/bird.png");
 
   // Uncomment to load sounds:
   // shootSound     = loadSound("assets/sounds/shoot.wav");
@@ -280,7 +303,7 @@ function draw() {
   if (gameState === STATE_PLAY) {
     updateMoveSpeed();
     handleInput();
-    animateFish();
+    animateCharacter();
     applyBounce();
 
     // ADDED — tile physics: solid blockage, hazards, checkpoints
@@ -310,19 +333,41 @@ function draw() {
 }
 
 // ------------------------------------------------------------
-// animateFish() — Cycles active frames when velocity is detected
+// animateCharacter() — Dynamic state animation processing
 // ------------------------------------------------------------
-function animateFish() {
-  if (player.isMoving) {
-    player.frameTimer++;
-    if (player.frameTimer >= FISH_SPRITE.animSpeed) {
+function animateCharacter() {
+  let inSea = playerInWater();
+
+  if (inSea) {
+    // Fish Animation Logic
+    if (player.isMoving) {
+      player.frameTimer++;
+      if (player.frameTimer >= FISH_SPRITE.animSpeed) {
+        player.frameTimer = 0;
+        player.currentFrame = (player.currentFrame + 1) % FISH_SPRITE.numFrames;
+      }
+    } else {
+      player.currentFrame = 0;
       player.frameTimer = 0;
-      player.currentFrame = (player.currentFrame + 1) % FISH_SPRITE.numFrames;
     }
   } else {
-    // Revert to frame 0 when key inputs are idle
-    player.currentFrame = 0;
-    player.frameTimer = 0;
+    // Bird Animation Logic
+    let isFlapping = keyIsDown(32); // Check if spacebar is actively pressed
+    let currentAnimMode = isFlapping ? "flying" : "running";
+    let maxFrames = BIRD_SPRITE.maxFrames[currentAnimMode];
+
+    // Only advance frames if the bird is running along the ground or actively flapping to fly
+    if (isFlapping || player.isMoving) {
+      player.frameTimer++;
+      if (player.frameTimer >= BIRD_SPRITE.animSpeed) {
+        player.frameTimer = 0;
+        player.currentFrame = (player.currentFrame + 1) % maxFrames;
+      }
+    } else {
+      // Idle on land: Freeze on the first frame of the running row
+      player.currentFrame = 0;
+      player.frameTimer = 0;
+    }
   }
 }
 
@@ -565,22 +610,18 @@ function resolveSolidCollisions() {
 function resolveCircleRect(p, rect) {
   const closestX = constrain(p.x, rect.x, rect.x + rect.w);
   const closestY = constrain(p.y, rect.y, rect.y + rect.h);
-
   const dx = p.x - closestX;
   const dy = p.y - closestY;
   const distSq = dx * dx + dy * dy;
 
-  if (distSq >= p.r * p.r) return; // not overlapping
-
+  if (distSq >= p.r * p.r) return;
   const d = Math.sqrt(distSq);
 
   if (d > 0) {
-    // push out along the line from the rect's closest edge point to the player centre
     const overlap = p.r - d;
     p.x += (dx / d) * overlap;
     p.y += (dy / d) * overlap;
   } else {
-    // player centre is exactly on/inside the rect — push out the shortest way
     const left = p.x - rect.x;
     const right = rect.x + rect.w - p.x;
     const top = p.y - rect.y;
@@ -589,8 +630,10 @@ function resolveCircleRect(p, rect) {
 
     if (min === left) p.x = rect.x - p.r;
     else if (min === right) p.x = rect.x + rect.w + p.r;
-    else if (min === top) p.y = rect.y - p.r;
-    else p.y = rect.y + rect.h + p.r;
+    else if (min === top) {
+      p.y = rect.y - p.r;
+      if (p.vy > 0) p.vy = 0; // <-- Lands on top of a tile, stop gravity velocity accumulation
+    } else p.y = rect.y + rect.h + p.r;
   }
 }
 
@@ -1158,31 +1201,51 @@ function drawBackground() {
 // handleInput() — Updates player position and tracking direction
 // ------------------------------------------------------------
 function handleInput() {
-  player.isMoving = false; // Reset velocity indicator by default
+  player.isMoving = false;
+  let inSea = playerInWater();
 
-  if (keyIsDown(87)) {
-    // W - Up
-    player.y -= moveSpeed;
-    player.isMoving = true;
-  }
-  if (keyIsDown(83)) {
-    // S - Down
-    player.y += moveSpeed;
-    player.isMoving = true;
-  }
+  // --- Horizontal Movement (Shared by both forms) ---
   if (keyIsDown(65)) {
     // A - Left
     player.x -= moveSpeed;
-    player.facing = "left"; // Point source coordinate calculation to Row 0
+    player.facing = "left";
     player.isMoving = true;
   }
   if (keyIsDown(68)) {
     // D - Right
     player.x += moveSpeed;
-    player.facing = "right"; // Point source coordinate calculation to Row 1
+    player.facing = "right";
     player.isMoving = true;
   }
 
+  // --- Vertical Movement (Context Dependent) ---
+  if (inSea) {
+    // Standard swimming mechanics inside the water
+    player.vy = 0; // Cancel out residual gravity values
+    if (keyIsDown(87)) {
+      // W - Up
+      player.y -= moveSpeed;
+      player.isMoving = true;
+    }
+    if (keyIsDown(83)) {
+      // S - Down
+      player.y += moveSpeed;
+      player.isMoving = true;
+    }
+  } else {
+    // Air/Land mechanics: Apply gravity over time
+    player.vy += GRAVITY;
+    player.vy = constrain(player.vy, -TERMINAL_VELOCITY, TERMINAL_VELOCITY);
+    player.y += player.vy;
+
+    // Press SPACEBAR to fly/flap upward
+    if (keyIsDown(32)) {
+      // Spacebar
+      player.vy = FLAP_FORCE;
+    }
+  }
+
+  // Constrain to world bounds
   player.x = constrain(player.x, player.r, WORLD_W - player.r);
   player.y = constrain(player.y, player.r, WORLD_H - player.r);
 }
@@ -1209,35 +1272,68 @@ function updateBullets() {
 }
 
 // ------------------------------------------------------------
-// drawPlayer()
-// Drawn in world coordinates. Flickers while invincible.
+// drawPlayer() — Slices active state asset based on environment
 // ------------------------------------------------------------
 function drawPlayer() {
   if (player.invincible && floor(player.invincibleTimer / 6) % 2 === 0) return;
 
-  let row = FISH_SPRITE.rows[player.facing];
-
-  let sx = player.currentFrame * FISH_SPRITE.frameWidth;
-  let sy = row * FISH_SPRITE.frameHeight;
-
-  let dw = FISH_SPRITE.frameWidth * FISH_SPRITE.scale;
-  let dh = FISH_SPRITE.frameHeight * FISH_SPRITE.scale;
+  let inSea = playerInWater();
 
   push();
-  // Temporarily switch to CENTER mode just for the player, then restore it
-  imageMode(CENTER);
-  image(
-    fishSheet,
-    player.x,
-    player.y,
-    dw,
-    dh,
-    sx,
-    sy,
-    FISH_SPRITE.frameWidth,
-    FISH_SPRITE.frameHeight
-  );
-  pop(); // Restores imageMode back to CORNER for everything else
+  imageMode(CENTER); // Safely isolate centering mechanics inside push/pop
+
+  if (inSea) {
+    // --- Render Fish ---
+    let row = FISH_SPRITE.rows[player.facing];
+    let sx = player.currentFrame * FISH_SPRITE.frameWidth;
+    let sy = row * FISH_SPRITE.frameHeight;
+    let dw = FISH_SPRITE.frameWidth * FISH_SPRITE.scale;
+    let dh = FISH_SPRITE.frameHeight * FISH_SPRITE.scale;
+
+    image(
+      fishSheet,
+      player.x,
+      player.y,
+      dw,
+      dh,
+      sx,
+      sy,
+      FISH_SPRITE.frameWidth,
+      FISH_SPRITE.frameHeight
+    );
+  } else {
+    // --- Render Bird ---
+    let isFlapping = keyIsDown(32);
+    let animMode = isFlapping ? "flying" : "running";
+    let row = BIRD_SPRITE.rows[animMode];
+
+    // If we just stopped flapping, make sure our frame target doesn't exceed the running row's max frames
+    let safeFrame = player.currentFrame % BIRD_SPRITE.maxFrames[animMode];
+
+    let sx = safeFrame * BIRD_SPRITE.frameWidth;
+    let sy = row * BIRD_SPRITE.frameHeight;
+    let dw = BIRD_SPRITE.frameWidth * BIRD_SPRITE.scale;
+    let dh = BIRD_SPRITE.frameHeight * BIRD_SPRITE.scale;
+
+    translate(player.x, player.y);
+    if (player.facing === "left") {
+      scale(-1, 1);
+    }
+
+    image(
+      birdSheet,
+      0,
+      0,
+      dw,
+      dh,
+      sx,
+      sy,
+      BIRD_SPRITE.frameWidth,
+      BIRD_SPRITE.frameHeight
+    );
+  }
+
+  pop();
 }
 
 // ------------------------------------------------------------
