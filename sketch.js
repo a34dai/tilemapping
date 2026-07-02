@@ -69,7 +69,7 @@ const BIRD_SPRITE = {
   },
 };
 
-const GRAVITY = 0.5; // 4.0  bird gravity? Calibrated downward pull
+const GRAVITY = 0.6; // 4.0  bird gravity? Calibrated downward pull
 const GRAVITY_AFTER_CHECKPOINT = GRAVITY * 1; // 60% of normal gravity after first checkpoint
 const FLAP_FORCE = -8; // -24 // Gives the exact velocity curve to hit 3 blocks high
 const TERMINAL_VELOCITY = 20;
@@ -81,7 +81,7 @@ const FISH_SWIM_UP = 0.4;           // upward force — lower = harder to swim u
 const FISH_SWIM_DOWN = 0.9;         // downward force — faster to sink than rise
 
 const FISH_STAMINA_MAX = 100;
-const FISH_STAMINA_REGEN = 0.4;      // stamina recovered per frame when not flapping
+const FISH_STAMINA_REGEN = 0.5;      // stamina recovered per frame when not flapping
 const FISH_STAMINA_COST = 10;        // stamina used per flap tap
 const FISH_FLAP_FORCE = 2;         // upward burst per flap
 const FISH_FLAP_DECAY = 0.3;         // how quickly flap burst fades (higher = shorter burst)
@@ -91,7 +91,7 @@ const FISH_WATER_DRAG = 0.88;
 const TILE_SIZE = 50;
 
 let player = {
-  x: 3 * TILE_SIZE, //405
+  x: 330 * TILE_SIZE, //405
   y: 15 * TILE_SIZE,
   vy: 1,
   vx: 0,
@@ -932,11 +932,24 @@ if (jsonFile === fishArea && fishareaBG) {
 
     // Draw cavebg using its original dimensions, aligned to the
     // top-right corner of the birdArea section.
-    const areaWidth = birdArea.mapWidth * TILE_SIZE;
-    const caveX = mapXOffset + areaWidth - cavebg.width;
-    const caveY = mapYOffset; // top edge of birdArea
+    //const areaWidth = birdArea.mapWidth * TILE_SIZE;
+    //const caveX = mapXOffset + areaWidth - cavebg.width;
+    //const caveY = mapYOffset; // top edge of birdArea
 
-    image(cavebg, caveX, caveY);
+    //image(cavebg, caveX, caveY);
+
+    const areaWidth = birdArea.mapWidth * TILE_SIZE;
+const areaHeight = birdArea.mapHeight * TILE_SIZE;
+
+// pick a target size — e.g. shrink to fit map height, keep aspect ratio
+const caveScale = 0.5; // or hardcode a smaller value like 0.6
+const caveW = cavebg.width * caveScale;
+const caveH = cavebg.height * caveScale;
+
+const caveX = mapXOffset + areaWidth - caveW;
+const caveY = mapYOffset; 
+
+image(cavebg, caveX, caveY, caveW, caveH);
   }
 
   for (let l = layers.length - 1; l > -1; l--) {
@@ -1137,8 +1150,7 @@ function tileColor(layerName, id) {
       return color("yellow"); // yellow — background
     case "water":
       return color(20, 60, 160, 160); // blue — background
-    case "background sky":
-      return color("lightblue"); // pale blue — background
+    
   }
 
   // fallback: old id-based colours, for any layer name not listed above
