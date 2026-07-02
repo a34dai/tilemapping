@@ -10,7 +10,7 @@
 let camX = 0;
 let camY = 0;
 const CAM_SMOOTHING = 0.5;
-let camZoom = 0.7;
+let camZoom = 0.2;
 
 // ------------------------------------------------------------
 // PLAYER CONFIGURATION
@@ -148,6 +148,7 @@ let spike1Img;
 let spike2Img;
 let spike3Img;
 let spike4Img;
+let waterSurfaceImg;
 
 let fishareaBG;
 let fishareaOverlay;
@@ -206,12 +207,13 @@ function preload() {
   sandImg = loadImage("assets/sand.png");
   sandrockImg = loadImage("assets/sandrock.png");
   rockImg = loadImage("assets/rock.png");
-  bgRockImg = loadImage("assets/bgrock.png");
+  bgRockImg = loadImage("assets/bgrock.jpg");
   spike1Img = loadImage("assets/spike1.png");
   spike2Img = loadImage("assets/spike2.png");
   spike3Img = loadImage("assets/spike3.png");
   spike4Img = loadImage("assets/spike4.png");
-  fishareaBG = loadImage("assets/fishareaBG.png");
+  waterSurfaceImg = loadImage("assets/watersurface.png");
+  fishareaBG = loadImage("assets/fishareaBG.jpg");
   fishareaOverlay = loadImage("assets/fishareaoverlay.png");
   cavebg = loadImage("assets/cavebg.png");
   birdSheet = loadImage("assets/bird.png");
@@ -944,7 +946,7 @@ function drawTiles(jsonFile) {
     //Draw cavebg using its original dimensions, aligned to the
     // top-right corner of the birdArea section.
     const caveX =
-      mapXOffset + birdArea.mapWidth * TILE_SIZE - cavebg.width - 12 * TILE_SIZE; // right edge of birdArea
+      mapXOffset + birdArea.mapWidth * TILE_SIZE - cavebg.width - 26 * TILE_SIZE; // right edge of birdArea
     const caveY = mapYOffset; // top edge of birdArea
 
     image(cavebg, caveX, caveY);
@@ -1065,7 +1067,15 @@ function drawTiles(jsonFile) {
   } else {
     fill(tileColor(layer.name, t.id));
     rect(x, y, TILE_SIZE, TILE_SIZE);
+  } 
+} else if (layer.name === "water surface") {
+  if (waterSurfaceImg) {
+    image(waterSurfaceImg, x, y, TILE_SIZE, TILE_SIZE);
+  } else {
+    fill(tileColor(layer.name, t.id));
+    rect(x, y, TILE_SIZE, TILE_SIZE);
   }
+  
 
       } else if (
         (jsonFile === birdArea ||
