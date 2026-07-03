@@ -91,8 +91,8 @@ const FISH_WATER_DRAG = 0.88;
 const TILE_SIZE = 50;
 
 let player = {
-  x: 330 * TILE_SIZE, //405
-  y: 15 * TILE_SIZE,
+  x: 300 * TILE_SIZE, //405
+  y: 2 * TILE_SIZE,
   vy: 1,
   vx: 0,
   r: 15, //22
@@ -136,6 +136,7 @@ let startArea;
 let birdArea;
 let fishArea;
 let endArea;
+let keyTilesList = [];
 let tiles = [];
 
 let waterTiles = [];
@@ -163,10 +164,10 @@ let birdSheet; //bird sprite sheet
 // the same id number means different things on different layers.
 // Add/rename layer names here to match your map.json exactly.
 // ------------------------------------------------------------
-const SOLID_LAYERS = ["rock", "seaweed", "sand", "algae", "bark"]; // blocks movement CHANGE SEAWEED PROPERTES
+const SOLID_LAYERS = ["rock", "sand", "algae", "bark"]; // blocks movement CHANGE SEAWEED PROPERTES
 const HAZARD_LAYERS = ["spikes"]; // kills on contact
 const CHECKPOINT_LAYER = "checkpoint"; // respawn points
-const COLLECTABLE_LAYER = "coins";
+const KEY_LAYER = "key"; // matches the JSON layer name
 const WHIRLPOOL_LAYER = "whirlpool";
 // "water" and "bg green" (and anything else) are treated as pure
 // background — they're drawn but never checked for collision.
@@ -177,11 +178,14 @@ let checkpoints = []; // [{x,y,w,h,spawnX,spawnY}] grouped checkpoint zones, sor
 let activeCheckpointIndex = -1; // index into `checkpoints` of the furthest one reached
 let lastCheckpoint = null; // {x,y} world coords the player respawns at
 let playerStart = { x: 0, y: 0 }; // fallback spawn if no checkpoint reached yet
-let coinMap = new Map(); // key: "tx,ty" -> collected boolean
-let coinsTotal = 0;
-let coinsCollected = 0;
+let keyMap = new Map(); // world "x,y" -> collected boolean
+let keyTotal = 0;
+let keyCollected = 0;
+let allKeysCollected = false;
 let whirlpoolTiles = []; // [{x,y,w,h}]
-let allCoinsCollected = false;
+let seaweedTiles = []; // [{x,y,w,h}] world-space rects — slows the fish, doesn't block it
+const SEAWEED_LAYER = "seaweed";
+const SEAWEED_SLOW_FACTOR = 2.5; // divides moveSpeed — tune to taste for "150% slower"
 
 // ------------------------------------------------------------
 // GAME STATE
@@ -218,6 +222,7 @@ function preload() {
   cavebg = loadImage("assets/cavebg.png");
   birdSheet = loadImage("assets/bird.png");
   humanSheet = loadImage("assets/human.png");
+  whirlpoolImg = loadImage("assets/whirlpool.png");
 }
 
 // ============================================================
@@ -266,6 +271,59 @@ function setup() {
 // ============================================================
 // draw()
 // ============================================================
+function getAreaWorldBounds(jsonFile) {
+  if (jsonFile === startArea) {
+    return {
+      x: 0,
+      y: 0,
+      w: startArea.mapWidth * TILE_SIZE,
+      h: startArea.mapHeight * TILE_SIZE,
+    };
+  }
+
+  if (jsonFile === birdArea) {
+    return {
+      x: startArea.mapWidth * TILE_SIZE,
+      y: 0,
+      w: birdArea.mapWidth * TILE_SIZE,
+      h: birdArea.mapHeight * TILE_SIZE,
+    };
+  }
+
+  if (jsonFile === fishArea) {
+    return {
+      x: TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 33),
+      y: TILE_SIZE * birdArea.mapHeight,
+      w: fishArea.mapWidth * TILE_SIZE,
+      h: fishArea.mapHeight * TILE_SIZE,
+    };
+  }
+
+  if (jsonFile === endArea) {
+    return {
+      x: TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth),
+      y: TILE_SIZE * (birdArea.mapHeight - endArea.mapHeight),
+      w: endArea.mapWidth * TILE_SIZE,
+      h: endArea.mapHeight * TILE_SIZE,
+    };
+  }
+
+  return null;
+}
+
+function shouldDrawArea(jsonFile) {
+  const bounds = getAreaWorldBounds(jsonFile);
+  if (!bounds) return false;
+
+  const margin = 2 * TILE_SIZE;
+  return (
+    player.x + player.r + margin > bounds.x &&
+    player.x - player.r - margin < bounds.x + bounds.w &&
+    player.y + player.r + margin > bounds.y &&
+    player.y - player.r - margin < bounds.y + bounds.h
+  );
+}
+
 function draw() {
   background(20);
   console.log(player.x / 50, player.y / 50); // for troubleshooting
@@ -282,26 +340,20 @@ function draw() {
 
   //drawBackground();
 
-  if (player.x < TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth / 2)) {
+  if (shouldDrawArea(startArea)) {
     drawTiles(startArea);
-    print("start area drawn");
   }
 
-  //if (player.x > TILE_SIZE * startArea.mapWidth / 2) {
-  drawTiles(birdArea);
-  //print("bird area drawn")
-  //}
-
-  // if player is near y lvel of fish area
-  if (player.y > TILE_SIZE * (birdArea.mapHeight - fishArea.mapHeight)) {
-    // add end of fish area boundary later
-    drawTiles(fishArea); // fish area
-    //console.log("fish area drawn");
+  if (shouldDrawArea(birdArea)) {
+    drawTiles(birdArea);
   }
 
-  if (player.x > birdArea.mapWidth * TILE_SIZE) {
+  if (shouldDrawArea(fishArea)) {
+    drawTiles(fishArea);
+  }
+
+  if (shouldDrawArea(endArea)) {
     drawTiles(endArea);
-    //print("end area drawn");
   }
 
   if (gameState === STATE_PLAY) {
@@ -317,7 +369,7 @@ function draw() {
     // ADDED — tile physics: solid blockage, hazards, checkpoints
     resolveSolidCollisions();
     checkWhirlpools();
-    checkCollectables();
+    checkKeys();
     checkHazardCollisions();
     checkCheckpoints();
 
@@ -333,8 +385,31 @@ function draw() {
   }
 
   pop(); // restore screen coordinates
+  drawKeyHUD();
 }
 
+function drawKeyHUD() {
+  const padding = 14;
+  const boxW = 110;
+  const boxH = 34;
+  const x = width - boxW - padding;
+  const y = padding;
+
+  push();
+  noStroke();
+  fill(0, 0, 0, 140);
+  rect(x, y, boxW, boxH, 8);
+
+  fill(230, 200, 80); // key gold
+  rect(x + 12, y + boxH / 2 - 7, 12, 14, 2); // simple key-shaped icon block
+
+  fill(255);
+  textSize(16);
+  textFont("monospace");
+  textAlign(LEFT, CENTER);
+  text(`${keyCollected} / ${keyTotal}`, x + 32, y + boxH / 2 + 1);
+  pop();
+}
 // ------------------------------------------------------------
 // animateCharacter() — Dynamic state animation processing
 // ------------------------------------------------------------
@@ -438,7 +513,7 @@ function updateInvincibility() {
 function processJsonLayers(
   jsonFile,
   checkpointTiles,
-  coinTiles,
+  keyTiles,
   offsetX = 0,
   offsetY = 0,
 ) {
@@ -449,16 +524,18 @@ function processJsonLayers(
     const isSolid = SOLID_LAYERS.includes(layer.name);
     const isHazard = HAZARD_LAYERS.includes(layer.name);
     const isCheckpoint = layer.name === CHECKPOINT_LAYER;
-    const isCoin = layer.name === COLLECTABLE_LAYER;
+    const isKey = layer.name === KEY_LAYER;
     const isWhirlpool = layer.name === WHIRLPOOL_LAYER;
+    const isSeaweed = layer.name === SEAWEED_LAYER; // ADDED
 
     if (
       !isSolid &&
       !isHazard &&
       !isCheckpoint &&
-      !isCoin &&
+      !isKey &&
       !isWhirlpool &&
-      !isWater
+      !isWater &&
+      !isSeaweed // ADDED
     )
       continue;
 
@@ -474,9 +551,10 @@ function processJsonLayers(
       if (isSolid) solidTiles.push(rect);
       else if (isHazard) hazardTiles.push(rect);
       else if (isCheckpoint) checkpointTiles.push(rect);
-      else if (isCoin) coinTiles.push(rect);
+      else if (isKey) keyTiles.push(rect);
       else if (isWhirlpool) whirlpoolTiles.push(rect);
       else if (isWater) waterTiles.push(rect);
+      else if (isSeaweed) seaweedTiles.push(rect); // ADDED
     }
   }
 }
@@ -496,19 +574,18 @@ function buildTileCollision() {
   solidTiles = [];
   hazardTiles = [];
   const checkpointTiles = [];
-  const coinTiles = [];
+  const keyTiles = [];
   whirlpoolTiles = [];
   waterTiles = [];
+  seaweedTiles = []; // ADDED
 
-  processJsonLayers(startArea, checkpointTiles, coinTiles, 0, 0);
+  processJsonLayers(startArea, checkpointTiles, keyTiles, 0, 0);
 
   // Process layers from birdArea (no offset)
-  //processJsonLayers(startArea, checkpointTiles, coinTiles, 0, 0)
-  //processJsonLayers(birdArea, checkpointTiles, coinTiles, 0, 0);
   processJsonLayers(
     birdArea,
     checkpointTiles,
-    coinTiles,
+    keyTiles,
     startArea.mapWidth * TILE_SIZE,
     0,
   );
@@ -520,7 +597,7 @@ function buildTileCollision() {
   processJsonLayers(
     fishArea,
     checkpointTiles,
-    coinTiles,
+    keyTiles,
     fishAreaOffsetX,
     fishAreaOffsetY,
   );
@@ -528,34 +605,23 @@ function buildTileCollision() {
   processJsonLayers(
     endArea,
     checkpointTiles,
-    coinTiles,
+    keyTiles,
     TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth),
     TILE_SIZE * (birdArea.mapHeight - endArea.mapHeight),
   );
 
-  function playerInWater() {
-    for (const t of waterTiles) {
-      const closestX = constrain(player.x, t.x, t.x + t.w);
-      const closestY = constrain(player.y, t.y, t.y + t.h);
-
-      if (dist(player.x, player.y, closestX, closestY) < player.r) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  checkpoints = groupCheckpointTiles(checkpointTiles);
+ checkpoints = groupCheckpointTiles(checkpointTiles);
   console.log("Checkpoints found:", checkpoints.length, checkpoints);
   console.log("Total checkpoint tiles:", checkpointTiles.length);
 
-  // register coins
-  coinMap = new Map();
-  coinsTotal = coinTiles.length;
-  coinsCollected = 0;
-  for (const c of coinTiles) {
-    const k = c.tx + "," + c.ty;
-    coinMap.set(k, false);
+keyTilesList = keyTiles;
+  keyMap = new Map();
+  keyTotal = keyTilesList.length;
+  keyCollected = 0;
+  allKeysCollected = false;
+  for (const k of keyTilesList) {
+    const mk = k.x + "," + k.y;
+    keyMap.set(mk, false);
   }
 }
 
@@ -568,15 +634,15 @@ function buildTileCollision() {
 // zone one spawn point (top-centre of the cluster).
 // ------------------------------------------------------------
 function groupCheckpointTiles(tileRects) {
-  const key = (tx, ty) => tx + "," + ty;
+  const key = (x, y) => x + "," + y; // USE WORLD COORDS not tx/ty
   const lookup = new Map();
-  for (const r of tileRects) lookup.set(key(r.tx, r.ty), r);
+  for (const r of tileRects) lookup.set(key(r.x, r.y), r);
 
   const visited = new Set();
   const groups = [];
 
   for (const start of tileRects) {
-    const startKey = key(start.tx, start.ty);
+    const startKey = key(start.x, start.y);
     if (visited.has(startKey)) continue;
 
     const queue = [start];
@@ -588,10 +654,10 @@ function groupCheckpointTiles(tileRects) {
       cluster.push(cur);
 
       const neighbours = [
-        [cur.tx + 1, cur.ty],
-        [cur.tx - 1, cur.ty],
-        [cur.tx, cur.ty + 1],
-        [cur.tx, cur.ty - 1],
+        [cur.x + TILE_SIZE, cur.y],
+        [cur.x - TILE_SIZE, cur.y],
+        [cur.x, cur.y + TILE_SIZE],
+        [cur.x, cur.y - TILE_SIZE],
       ];
       for (const [nx, ny] of neighbours) {
         const nk = key(nx, ny);
@@ -602,10 +668,7 @@ function groupCheckpointTiles(tileRects) {
       }
     }
 
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const c of cluster) {
       minX = Math.min(minX, c.x);
       minY = Math.min(minY, c.y);
@@ -619,11 +682,10 @@ function groupCheckpointTiles(tileRects) {
       w: maxX - minX,
       h: maxY - minY,
       spawnX: (minX + maxX) / 2,
-      spawnY: minY - player.r - 4, // spawn just above the checkpoint tiles
+      spawnY: minY - player.r - 4,
     });
   }
 
-  // Left-to-right order so "furthest checkpoint reached" is just an index.
   groups.sort((a, b) => a.x - b.x);
   return groups;
 }
@@ -685,6 +747,11 @@ function resolveCircleRect(p, rect) {
 // ------------------------------------------------------------
 function checkHazardCollisions() {
   if (player.invincible) return;
+  
+ if (player.x < TILE_SIZE * startArea.mapWidth && player.y > 30 * TILE_SIZE) {
+    respawnFromHazard();
+    return;
+  }
 
   for (const t of hazardTiles) {
     const closestX = constrain(player.x, t.x, t.x + t.w);
@@ -710,7 +777,10 @@ function checkCheckpoints() {
     const cp = checkpoints[i];
     const overlapsX =
       player.x + player.r > cp.x && player.x - player.r < cp.x + cp.w;
-    if (overlapsX) {
+    const overlapsY =
+      player.y + player.r > cp.y && player.y - player.r < cp.y + cp.h;
+
+    if (overlapsX && overlapsY) {
       activeCheckpointIndex = i;
       lastCheckpoint = { x: cp.spawnX, y: cp.spawnY };
       console.log("Checkpoint activated:", i, lastCheckpoint);
@@ -792,28 +862,26 @@ function respawnFromHazard() {
 // ------------------------------------------------------------
 // checkCollectables()
 // Detects overlap with coin tiles and marks them collected.
-// When all coins are collected sets `allCoinsCollected`.
+// When all coins are collected sets `allCoinCollected`.
 // ------------------------------------------------------------
-function checkCollectables() {
-  if (coinsTotal === 0 || allCoinsCollected) return;
+function checkKeys() {
+  if (keyTotal === 0 || allKeysCollected) return;
 
-  for (const layer of birdArea.layers) {
-    if (layer.name !== COLLECTABLE_LAYER) continue;
-    for (const t of layer.tiles) {
-      const key = t.x + "," + t.y;
-      if (coinMap.get(key)) continue; // already collected
+  for (const t of keyTilesList) {
+    const mapKey = t.x + "," + t.y;
+    if (keyMap.get(mapKey)) continue; // already collected
 
-      const cx = t.x * TILE_SIZE + TILE_SIZE / 2;
-      const cy = t.y * TILE_SIZE + TILE_SIZE / 2;
-      const d = dist(player.x, player.y, cx, cy);
-      if (d < player.r + TILE_SIZE * 0.35) {
-        coinMap.set(key, true);
-        coinsCollected++;
-        if (coinsCollected >= coinsTotal) {
-          allCoinsCollected = true;
-          // hook: unlock door / advance level
-          console.log("All coins collected!");
-        }
+    const cx = t.x + t.w / 2;
+    const cy = t.y + t.h / 2;
+    const d = dist(player.x, player.y, cx, cy);
+
+    if (d < player.r + TILE_SIZE * 0.35) {
+      keyMap.set(mapKey, true);
+      keyCollected++;
+      if (keyCollected >= keyTotal) {
+        allKeysCollected = true;
+        gameState = STATE_WIN;
+        console.log("All keys collected — level can be completed!");
       }
     }
   }
@@ -851,7 +919,11 @@ function checkWhirlpools() {
 }
 
 function updateMoveSpeed() {
-  moveSpeed = playerInWater() ? 4 : PLAYER_SPEED;
+  if (playerInWater()) {
+    moveSpeed = playerInSeaweed() ? 4 / SEAWEED_SLOW_FACTOR : 4;
+  } else {
+    moveSpeed = PLAYER_SPEED;
+  }
 }
 
 function playerInWater() {
@@ -864,6 +936,25 @@ function playerInWater() {
   }
   return false;
 }
+
+function playerInSeaweed() {
+  for (const t of seaweedTiles) {
+    const closestX = constrain(player.x, t.x, t.x + t.w);
+    const closestY = constrain(player.y, t.y, t.y + t.h);
+    if (dist(player.x, player.y, closestX, closestY) < player.r) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Find leftmost tile of each checkpoint group
+  let checkpointLeftmost = new Set();
+  for (const cp of checkpoints) {
+    // cp.x is the world left edge — find the tile whose world x matches
+    const tileX = Math.round((cp.x - (jsonFile === birdArea ? TILE_SIZE * startArea.mapWidth : 0)) / TILE_SIZE);
+    checkpointLeftmost.add(tileX + "," + Math.round(cp.y / TILE_SIZE));
+  }
 
 function drawTiles(jsonFile) {
   const layers = jsonFile.layers;
@@ -995,21 +1086,20 @@ function drawTiles(jsonFile) {
       let x = t.x * TILE_SIZE + mapXOffset;
       let y = t.y * TILE_SIZE + mapYOffset;
 
-      // If this is a coin tile and it has been collected, skip drawing it
-      if (layer.name === COLLECTABLE_LAYER) {
-        const key = t.x + "," + t.y;
-        if (coinMap.get(key)) {
+      // If this is a key tile and it has been collected, skip drawing it
+      if (layer.name === KEY_LAYER) {
+        const mapKey = x + "," + y;
+        if (keyMap.get(mapKey)) {
           pop();
           continue;
         }
       }
 
-      // CHANGED — colour now keys off the layer name first (since the
-      // same id number means different things on different layers),
-      // falling back to the old id-based colours for anything else.
-      if (layer.name === COLLECTABLE_LAYER) {
+      if (layer.name === KEY_LAYER) {
         fill(tileColor(layer.name, t.id));
-        ellipse(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE * 0.6);
+        // simple key silhouette: circle head + small shaft, swap for a sprite later
+        ellipse(x + TILE_SIZE / 2, y + TILE_SIZE * 0.4, TILE_SIZE * 0.35);
+        rect(x + TILE_SIZE / 2 - 3, y + TILE_SIZE * 0.5, 6, TILE_SIZE * 0.3);
       } else if (layer.name === WHIRLPOOL_LAYER) {
         if (whirlpoolImg) {
           let frameW = whirlpoolImg.width / WHIRLPOOL_SPRITE.numFrames;
@@ -1139,8 +1229,33 @@ function drawTiles(jsonFile) {
           rect(x, y, TILE_SIZE, TILE_SIZE);
         }
       } else if (layer.name === "door") {
-        fill(0);
+        if (allKeysCollected) {
+          fill(80, 180, 80);
+        } else {
+          fill(40, 40, 40);
+        }
         rect(x, y, TILE_SIZE, TILE_SIZE);
+      } else if (layer.name === CHECKPOINT_LAYER) {
+        // Yellow block always
+        fill(tileColor(layer.name, t.id));
+        rect(x, y, TILE_SIZE, TILE_SIZE);
+
+        // Flag only on the leftmost tile of each checkpoint zone
+        for (const cp of checkpoints) {
+          if (abs(x - cp.x) < 1 && abs(y - cp.y) < 1) {
+            stroke(180, 180, 180);
+            strokeWeight(2);
+            line(x + TILE_SIZE / 2, y, x + TILE_SIZE / 2, y - TILE_SIZE);
+            noStroke();
+            fill(220, 40, 40);
+            triangle(
+              x + TILE_SIZE / 2, y - TILE_SIZE,
+              x + TILE_SIZE,     y - TILE_SIZE * 0.8,
+              x + TILE_SIZE / 2, y - TILE_SIZE * 0.6
+            );
+            break;
+          }
+        }
       } else {
         fill(tileColor(layer.name, t.id));
         rect(x, y, TILE_SIZE, TILE_SIZE);
@@ -1169,8 +1284,8 @@ function tileColor(layerName, id) {
       return color(90, 90, 90); // grey — solid
     case "seaweed":
       return color(40, 140, 60); // green — solid
-    case "coins":
-      return color(255, 215, 0); // gold coin
+    case "key":
+      return color(230, 200, 80); // gold key
     case "whirlpool":
       return color(30, 100, 200); // blue whirlpool
     case "sand":

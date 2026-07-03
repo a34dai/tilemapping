@@ -296,17 +296,6 @@
       "collider": false
     },
     {
-      "name": "coin",
-      "tiles": [
-        { "id": "7", "x": 3, "y": 8 },
-        { "id": "7", "x": 4, "y": 8 },
-        { "id": "7", "x": 9, "y": 5 },
-        { "id": "7", "x": 10, "y": 5 },
-        { "id": "7", "x": 11, "y": 5 }
-      ],
-      "collider": false
-    },
-    {
       "name": "key",
       "tiles": [{ "id": "16", "x": 22, "y": 11 }],
       "collider": false
