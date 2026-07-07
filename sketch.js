@@ -15,7 +15,7 @@ let camZoom = 0.7;
 // ------------------------------------------------------------
 // PLAYER CONFIGURATION
 // ------------------------------------------------------------
-const PLAYER_SPEED = 18; // bird
+const PLAYER_SPEED = 17; // bird
 let moveSpeed = PLAYER_SPEED;
 const INVINCIBLE_FRAMES = 90; // ADDED — was referenced but never defined
 
@@ -74,7 +74,7 @@ const GRAVITY_AFTER_CHECKPOINT = GRAVITY * 1; // 60% of normal gravity after fir
 const FLAP_FORCE = -8; // -24 // Gives the exact velocity curve to hit 3 blocks high
 const TERMINAL_VELOCITY = 20;
 const HUMAN_GRAVITY = 0.9;
-const HUMAN_SPEED = 10;
+const HUMAN_SPEED = 7;
 
 const FISH_SWIM_HORIZONTAL = 0.6; // left/right force
 const FISH_SWIM_UP = 0.4; // upward force — lower = harder to swim up
@@ -91,7 +91,7 @@ const FISH_WATER_DRAG = 0.88;
 const TILE_SIZE = 50;
 
 let player = {
-  x: 100 * TILE_SIZE, //405
+  x: 5 * TILE_SIZE, //405
   y: 10 * TILE_SIZE,
   vy: 1,
   vx: 0,
@@ -119,8 +119,8 @@ let player = {
   jumpCooldown: 0,
 };
 
-const WIND_FORCE = -1.5;      // stronger upward push = more negative
-const WIND_MAX_UP = -12;      // caps upward speed
+const WIND_FORCE = -1.5; // stronger upward push = more negative
+const WIND_MAX_UP = -12; // caps upward speed
 
 let windZones = [];
 
@@ -138,6 +138,7 @@ let whirlpoolFrame = 0;
 let whirlpoolTimer = 0;
 
 let startArea;
+let startbg;
 let birdArea;
 let fishArea;
 let endArea;
@@ -145,6 +146,9 @@ let keyTilesList = [];
 let tiles = [];
 
 let waterTiles = [];
+let grassImg;
+let groundImg;
+let barkImg;
 let seaweedImg;
 let sandImg;
 let sandrockImg;
@@ -169,7 +173,7 @@ let birdSheet; //bird sprite sheet
 // the same id number means different things on different layers.
 // Add/rename layer names here to match your map.json exactly.
 // ------------------------------------------------------------
-const SOLID_LAYERS = ["rock", "sand", "algae", "bark"]; // blocks movement CHANGE SEAWEED PROPERTES
+const SOLID_LAYERS = ["rock", "grass", "ground", "sand", "algae", "bark"]; // blocks movement CHANGE SEAWEED PROPERTES
 const HAZARD_LAYERS = ["spikes"]; // kills on contact
 const CHECKPOINT_LAYER = "checkpoint"; // respawn points
 const KEY_LAYER = "key"; // matches the JSON layer name
@@ -199,7 +203,7 @@ let score = 0;
 
 const STATE_PLAY = "play";
 const STATE_WIN = "win";
-const STATE_OVER = "over"; 
+const STATE_OVER = "over";
 let gameState = STATE_PLAY;
 
 // ============================================================
@@ -207,11 +211,16 @@ let gameState = STATE_PLAY;
 // ============================================================
 function preload() {
   startArea = loadJSON("data/startarea.json");
+  startbg = loadImage("assets/bgstart.png");
   birdArea = loadJSON("data/birdarea.json");
   fishArea = loadJSON("data/fisharea.json");
   endArea = loadJSON("data/endarea.json");
 
   fishSheet = loadImage("assets/fish.png");
+
+  grassImg = loadImage("assets/grass.png");
+  groundImg = loadImage("assets/ground.png");
+  barkImg = loadImage("assets/bark.png");
   seaweedImg = loadImage("assets/seaweed.png");
   sandImg = loadImage("assets/sand.png");
   sandrockImg = loadImage("assets/sandrock.png");
@@ -235,7 +244,12 @@ function preload() {
 // ============================================================
 function setup() {
   createCanvas(800, 450);
-  console.log("watersurfaccce loaded:", waterSurfaceImg.width, waterSurfaceImg.height);
+  noStroke();
+  console.log(
+    "watersurfaccce loaded:",
+    waterSurfaceImg.width,
+    waterSurfaceImg.height,
+  );
   WORLD_W =
     TILE_SIZE *
     (startArea.mapWidth +
@@ -261,12 +275,12 @@ function setup() {
   // and group checkpoint tiles into discrete zones.
   buildTileCollision();
 
-windZones.push({
-  x: TILE_SIZE * startArea.mapWidth,
-  y: 0,
-  w: 6 * TILE_SIZE,
-  h: birdArea.mapHeight * TILE_SIZE
-});
+  windZones.push({
+    x: TILE_SIZE * startArea.mapWidth - 450,
+    y: 0,
+    w: 6 * TILE_SIZE,
+    h: birdArea.mapHeight * TILE_SIZE,
+  });
 
   // ADDED — remember the player's starting point as the fallback
   // respawn location for before any checkpoint has been reached.
@@ -327,9 +341,9 @@ function shouldDrawArea(jsonFile) {
   const bounds = getAreaWorldBounds(jsonFile);
   if (!bounds) return false;
 
-  const visibleW = width / camZoom;   // ~1143px at camZoom 0.7
-  const visibleH = height / camZoom;  // ~643px at camZoom 0.7
-  const margin = 2 * TILE_SIZE;       // small buffer on top of the real viewport
+  const visibleW = width / camZoom; // ~1143px at camZoom 0.7
+  const visibleH = height / camZoom; // ~643px at camZoom 0.7
+  const margin = 2 * TILE_SIZE; // small buffer on top of the real viewport
 
   const viewLeft = camX - margin;
   const viewRight = camX + visibleW + margin;
@@ -428,7 +442,7 @@ function draw() {
 
   pop(); // restore screen coordinates
   drawKeyHUD();
-  drawInstructions(); 
+  drawInstructions();
 }
 
 function drawKeyHUD() {
@@ -678,11 +692,11 @@ function buildTileCollision() {
     TILE_SIZE * (birdArea.mapHeight - endArea.mapHeight),
   );
 
- checkpoints = groupCheckpointTiles(checkpointTiles);
+  checkpoints = groupCheckpointTiles(checkpointTiles);
   console.log("Checkpoints found:", checkpoints.length, checkpoints);
   console.log("Total checkpoint tiles:", checkpointTiles.length);
 
-keyTilesList = keyTiles;
+  keyTilesList = keyTiles;
   keyMap = new Map();
   keyTotal = keyTilesList.length;
   keyCollected = 0;
@@ -847,8 +861,8 @@ function resolveCircleRect(p, rect) {
 // ------------------------------------------------------------
 function checkHazardCollisions() {
   if (player.invincible) return;
-  
- if (player.x < TILE_SIZE * startArea.mapWidth && player.y > 30 * TILE_SIZE) {
+
+  if (player.x < TILE_SIZE * startArea.mapWidth && player.y > 30 * TILE_SIZE) {
     respawnFromHazard();
     return;
   }
@@ -1046,12 +1060,15 @@ function playerInSeaweed() {
 }
 
 // Find leftmost tile of each checkpoint group
-  let checkpointLeftmost = new Set();
-  for (const cp of checkpoints) {
-    // cp.x is the world left edge — find the tile whose world x matches
-    const tileX = Math.round((cp.x - (jsonFile === birdArea ? TILE_SIZE * startArea.mapWidth : 0)) / TILE_SIZE);
-    checkpointLeftmost.add(tileX + "," + Math.round(cp.y / TILE_SIZE));
-  }
+let checkpointLeftmost = new Set();
+for (const cp of checkpoints) {
+  // cp.x is the world left edge — find the tile whose world x matches
+  const tileX = Math.round(
+    (cp.x - (jsonFile === birdArea ? TILE_SIZE * startArea.mapWidth : 0)) /
+      TILE_SIZE,
+  );
+  checkpointLeftmost.add(tileX + "," + Math.round(cp.y / TILE_SIZE));
+}
 
 function drawTiles(jsonFile) {
   const layers = jsonFile.layers;
@@ -1098,11 +1115,20 @@ function drawTiles(jsonFile) {
       let x = t.x * TILE_SIZE + mapXOffset;
       let y = t.y * TILE_SIZE + mapYOffset;
       fill(tileColor(layer.name, t.id));
+      noStroke();
       rect(x, y, TILE_SIZE, TILE_SIZE);
       pop();
     }
   }
-
+  if (jsonFile === startArea && startbg) {
+    image(
+      startbg,
+      0,
+      0,
+      startArea.mapWidth * TILE_SIZE,
+      startArea.mapHeight * TILE_SIZE,
+    );
+  }
   // Draw background image for fish area after water but before other tiles
   if (jsonFile === fishArea && fishareaBG) {
     const fishAreaOffsetX =
@@ -1135,17 +1161,21 @@ function drawTiles(jsonFile) {
     //Draw cavebg using its original dimensions, aligned to the
     // top-right corner of the birdArea section.
     const caveX =
-      mapXOffset + birdArea.mapWidth * TILE_SIZE - cavebg.width - 26 * TILE_SIZE; // right edge of birdArea
+      mapXOffset +
+      birdArea.mapWidth * TILE_SIZE -
+      cavebg.width -
+      26 * TILE_SIZE; // right edge of birdArea
     const caveY = mapYOffset; // top edge of birdArea
 
     image(cavebg, caveX, caveY);
   }
 
   for (let l = layers.length - 1; l > -1; l--) {
-    // for each layer we will....
     const layer = layers[l];
-    if (layer.name === "water") continue; // skip water, already drawn
-    if (jsonFile === birdArea && layer.name === "bg green") continue; // already drawn
+    if (layer.name === "water") continue;
+    if (jsonFile === birdArea && layer.name === "bg green") continue;
+    if (jsonFile === startArea && layer.name === "background sky") continue; // ADD THIS
+
     let spikePositions = null;
     if (jsonFile === birdArea && layer.name === "spikes") {
       spikePositions = new Set(
@@ -1242,37 +1272,53 @@ function drawTiles(jsonFile) {
           fill(tileColor(layer.name, t.id));
           rect(x, y, TILE_SIZE, TILE_SIZE);
         }
-      } else if ((jsonFile === birdArea || jsonFile === startArea || jsonFile === endArea) && layer.name === "rock") {
-  if (rockImg) {
-    image(rockImg, x, y, TILE_SIZE, TILE_SIZE);
-  } else {
-    fill(tileColor(layer.name, t.id));
-    rect(x, y, TILE_SIZE, TILE_SIZE);
-  }
-} else if (layer.name === "background rock") {
-  if (bgRockImg) {
-    image(bgRockImg, x, y, TILE_SIZE, TILE_SIZE);
-  } else {
-    fill(tileColor(layer.name, t.id));
-    rect(x, y, TILE_SIZE, TILE_SIZE);
-  } 
-} else if (layer.name === "water surface") {
-  if (waterSurfaceImg) {
-    image(waterSurfaceImg, x, y, TILE_SIZE, TILE_SIZE);
-  } else {
-    fill(tileColor(layer.name, t.id));
-    rect(x, y, TILE_SIZE, TILE_SIZE);
-  }
-  
-
       } else if (
         (jsonFile === birdArea ||
           jsonFile === startArea ||
           jsonFile === endArea) &&
-        layer.name === "background sky"
+        layer.name === "rock"
       ) {
-        fill(tileColor(layer.name, t.id));
-        rect(x, y, TILE_SIZE, TILE_SIZE);
+        if (rockImg) {
+          image(rockImg, x, y, TILE_SIZE, TILE_SIZE);
+        } else {
+          fill(tileColor(layer.name, t.id));
+          rect(x, y, TILE_SIZE, TILE_SIZE);
+        }
+      } else if (layer.name === "background rock") {
+        if (bgRockImg) {
+          image(bgRockImg, x, y, TILE_SIZE, TILE_SIZE);
+        } else {
+          fill(tileColor(layer.name, t.id));
+          rect(x, y, TILE_SIZE, TILE_SIZE);
+        }
+      } else if (layer.name === "grass") {
+        if (grassImg) {
+          image(grassImg, x, y, TILE_SIZE, TILE_SIZE);
+        } else {
+          fill(tileColor(layer.name, t.id));
+          rect(x, y, TILE_SIZE, TILE_SIZE);
+        }
+      } else if (layer.name === "ground") {
+        if (groundImg) {
+          image(groundImg, x, y, TILE_SIZE, TILE_SIZE);
+        } else {
+          fill(tileColor(layer.name, t.id));
+          rect(x, y, TILE_SIZE, TILE_SIZE);
+        }
+      } else if (layer.name === "bark") {
+        if (barkImg) {
+          image(barkImg, x, y, TILE_SIZE, TILE_SIZE);
+        } else {
+          fill(tileColor(layer.name, t.id));
+          rect(x, y, TILE_SIZE, TILE_SIZE);
+        }
+      } else if (layer.name === "water surface") {
+        if (waterSurfaceImg) {
+          image(waterSurfaceImg, x, y, TILE_SIZE, TILE_SIZE);
+        } else {
+          fill(tileColor(layer.name, t.id));
+          rect(x, y, TILE_SIZE, TILE_SIZE);
+        }
       } else if (jsonFile === birdArea && layer.name === "spikes") {
         const leftNeighbor = spikePositions.has(`${t.x - 1},${t.y}`);
         const rightNeighbor = spikePositions.has(`${t.x + 1},${t.y}`);
@@ -1333,10 +1379,6 @@ function drawTiles(jsonFile) {
         }
         rect(x, y, TILE_SIZE, TILE_SIZE);
       } else if (layer.name === CHECKPOINT_LAYER) {
-        // Yellow block always
-        fill(tileColor(layer.name, t.id));
-        rect(x, y, TILE_SIZE, TILE_SIZE);
-
         // Flag only on the leftmost tile of each checkpoint zone
         for (const cp of checkpoints) {
           if (abs(x - cp.x) < 1 && abs(y - cp.y) < 1) {
@@ -1346,9 +1388,12 @@ function drawTiles(jsonFile) {
             noStroke();
             fill(220, 40, 40);
             triangle(
-              x + TILE_SIZE / 2, y - TILE_SIZE,
-              x + TILE_SIZE,     y - TILE_SIZE * 0.8,
-              x + TILE_SIZE / 2, y - TILE_SIZE * 0.6
+              x + TILE_SIZE / 2,
+              y - TILE_SIZE,
+              x + TILE_SIZE,
+              y - TILE_SIZE * 0.8,
+              x + TILE_SIZE / 2,
+              y - TILE_SIZE * 0.6,
             );
             break;
           }
@@ -1371,6 +1416,8 @@ function drawTiles(jsonFile) {
 // ------------------------------------------------------------
 function tileColor(layerName, id) {
   switch (layerName) {
+    case "background sky":
+      return color(229, 254, 225); // sky
     case "bark":
       return color("brown"); // bark
     case "spikes":
@@ -1388,9 +1435,9 @@ function tileColor(layerName, id) {
     case "sand":
       return color("yellow"); // yellow — background
     case "water":
-      return color(20, 60, 160, 160); // blue — background
-      case "water surface":
-  return color(50, 130, 200, 180); // translucent blue, or whatever fits
+      return color(0, 68, 85); // blue — background
+    case "water surface":
+      return color(50, 130, 200, 180); // translucent blue, or whatever fits
   }
 
   // fallback: old id-based colours, for any layer name not listed above
@@ -1642,53 +1689,6 @@ function drawPlayer() {
   }
 
   pop();
-}
-
-// ------------------------------------------------------------
-// drawMinimap()
-// Drawn in screen coordinates after pop().
-// Shows a scaled-down view of the world
-// ------------------------------------------------------------
-function drawMinimap() {
-  let mapX = MAP_X;
-  let mapY = height - MAP_H - MAP_Y_OFFSET;
-
-  // Background
-  fill(0, 0, 0, 180);
-  stroke(80, 60, 120);
-  strokeWeight(1);
-  rect(mapX, mapY, MAP_W, MAP_H, 4);
-  noStroke();
-
-  // Helper — converts world position to minimap screen position
-  function worldToMap(wx, wy) {
-    return {
-      x: mapX + map(wx, 0, WORLD_W, 0, MAP_W),
-      y: mapY + map(wy, 0, WORLD_H, 0, MAP_H),
-    };
-  }
-
-  // Player dot — drawn last so it's always on top
-  fill(0, 200, 180);
-  let pp = worldToMap(player.x, player.y);
-  ellipse(pp.x, pp.y, 7);
-
-  // Camera viewport rectangle — shows what's currently visible
-  noFill();
-  stroke(255, 255, 255, 60);
-  strokeWeight(1);
-  let vp = worldToMap(camX, camY);
-  let vpW = map(width, 0, WORLD_W, 0, MAP_W);
-  let vpH = map(height, 0, WORLD_H, 0, MAP_H);
-  rect(vp.x, vp.y, vpW, vpH);
-  noStroke();
-
-  // Label
-  fill(120);
-  textSize(9);
-  textAlign(LEFT);
-  textFont("monospace");
-  text("MAP", mapX + 4, mapY + MAP_H - 4);
 }
 
 // ------------------------------------------------------------

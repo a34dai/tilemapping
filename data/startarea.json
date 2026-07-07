@@ -91,7 +91,7 @@
       "collider": false 
     },
     {
-      "name": "rock",
+      "name": "grass",
       "tiles": [
         { "id": "3", "x": 0, "y": 17 },
         { "id": "3", "x": 1, "y": 17 },
@@ -156,7 +156,7 @@
       "collider": false
     },
     {
-      "name": "rock",
+      "name": "ground",
       "tiles": [
         { "id": "4", "x": 1, "y": 18 },
         { "id": "4", "x": 2, "y": 18 },
