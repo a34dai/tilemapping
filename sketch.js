@@ -91,8 +91,8 @@ const FISH_WATER_DRAG = 0.88;
 const TILE_SIZE = 50;
 
 let player = {
-  x: 5 * TILE_SIZE, //405
-  y: 10 * TILE_SIZE,
+  x: 10 * TILE_SIZE, //405
+  y: 10 * TILE_SIZE, // for start
   vy: 1,
   vx: 0,
   r: 15, //22
@@ -211,7 +211,7 @@ let gameState = STATE_PLAY;
 // ============================================================
 function preload() {
   startArea = loadJSON("data/startarea.json");
-  startbg = loadImage("assets/bgstart.png");
+  startbg = loadImage("assets/startbg.png");
   birdArea = loadJSON("data/birdarea.json");
   fishArea = loadJSON("data/fisharea.json");
   endArea = loadJSON("data/endarea.json");
@@ -276,9 +276,9 @@ function setup() {
   buildTileCollision();
 
   windZones.push({
-    x: TILE_SIZE * startArea.mapWidth - 450,
+    x: TILE_SIZE * startArea.mapWidth - 470,
     y: 0,
-    w: 6 * TILE_SIZE,
+    w: 13 * TILE_SIZE,
     h: birdArea.mapHeight * TILE_SIZE,
   });
 
@@ -388,13 +388,11 @@ function draw() {
 
   // Everything inside push/pop is drawn in world coordinates
   push();
-  translate(width / 2, height / 2);
-  scale(camZoom); // translate to centre and scale the world translate
-  translate(-width / 2, -height / 2); // then translate the world by camera top-left in world pixels
-  translate(-camX, -camY);
+  let screenOffsetX = Math.round(width / 2 * (1 - camZoom) - camX * camZoom);
+let screenOffsetY = Math.round(height / 2 * (1 - camZoom) - camY * camZoom);
 
-  //drawBackground();
-
+translate(screenOffsetX, screenOffsetY);
+scale(camZoom);
   if (shouldDrawArea(startArea)) {
     drawTiles(startArea);
   }
@@ -551,7 +549,7 @@ function updateCamera() {
   let visibleH = height / camZoom;
 
   let targetX = player.x - width / 2;
-  let targetY = player.y - height / 2;
+  let targetY = player.y - height / 1.5;
 
   targetX = constrain(targetX, 0, WORLD_W - width);
   targetY = constrain(targetY, 0, WORLD_H - height);
