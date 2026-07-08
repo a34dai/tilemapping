@@ -27,7 +27,7 @@ const FISH_SPRITE = {
   frameHeight: 0, // Calculated dynamically in setup()
   numFrames: 2, // Each row contains 2 frames for the swim animation
   animSpeed: 12, // Controls tail wag speed (lower = faster)
-  scale: 0.15, // Scale factor to map image size nicely to player.r (22px)
+  scale: 0.2, // Scale factor to map image size nicely to player.r (22px)
 
   // Row mapping: row 0 is left, row 1 is right
   rows: {
@@ -46,7 +46,7 @@ const HUMAN_SPRITE = {
   frameHeight: 0, // set in setup()
   numFrames: 4,
   animSpeed: 10,
-  scale: 1,
+  scale: 0.2,
   rows: {
     right: 0,
     left: 1,
@@ -110,8 +110,8 @@ const FORM_FISH = "fish";
 const FORM_ORDER = [FORM_HUMAN, FORM_BIRD, FORM_FISH]; // defines forward-only progression
 
 let player = {
-  x: 2 * TILE_SIZE,
-  y: 10 * TILE_SIZE, // 17 for start
+  x: 300 * TILE_SIZE,
+  y: 40 * TILE_SIZE, // 17 for start
   vy: 1,
   vx: 0,
   r: 15,
@@ -344,9 +344,9 @@ windZones.push({
 // Zone 3: end area — force fish -> human
 windZones.push({
   x: TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth),
-  y: TILE_SIZE * (birdArea.mapHeight - endArea.mapHeight),
-  w: endArea.mapWidth * TILE_SIZE,
-  h: endArea.mapHeight * TILE_SIZE,
+  y: TILE_SIZE * (birdArea.mapHeight - endArea.mapHeight / 5),
+  w: 6 * TILE_SIZE,
+  h: endArea.mapHeight / 5  * TILE_SIZE,
   fromForm: FORM_FISH,
   transformTo: FORM_HUMAN,
   hasCeiling: false,
@@ -1188,14 +1188,11 @@ function respawnFromHazard() {
   if (diesound) diesound.play();
    if (walkingsound && walkingsound.isPlaying()) walkingsound.stop(); 
   if (flappingsound && flappingsound.isPlaying()) flappingsound.stop(); 
-  if (fishareamp3 && fishareamp3.isPlaying()) fishareamp3.stop(); // NEW
-
-
-
+  if (fishareasound && fishareasound.isPlaying()) fishareasound.stop();
 
   const spawn =
-    findClosestPassedCheckpoint(player.x, player.y) ||
     lastCheckpoint ||
+    findClosestPassedCheckpoint(player.x, player.y) ||
     playerStart;
 
   player.x = spawn.x;
@@ -1399,12 +1396,12 @@ function drawTiles(jsonFile) {
 
     //Draw cavebg using its original dimensions, aligned to the
     // top-right corner of the birdArea section.
-    const caveX =
-      mapXOffset +
-      birdArea.mapWidth * TILE_SIZE -
-      cavebg.width -
-      26 * TILE_SIZE; // right edge of birdArea
-    const caveY = mapYOffset; // top edge of birdArea
+    const fishAreaStartX =
+      TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37);
+    const buffer = 2 * TILE_SIZE; // small gap before fishArea begins
+
+    const caveX = fishAreaStartX - buffer - cavebg.width;
+    const caveY = mapYOffset;
 
     image(cavebg, caveX, caveY);
   }

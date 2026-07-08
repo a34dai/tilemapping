@@ -1,42 +1,55 @@
-# Week 6 Example 2 — Free Roam Top-Down with Boss Battle
+## Project Title: Halcyon
 
-## What This Example Demonstrates
+## Group Number: 6B
 
-- **Free roam world** — the world is 1600×2000px; the player moves in world coordinates and is constrained to world boundaries with `constrain()`
-- **Smooth-follow camera** — `camX` and `camY` track the top-left of the visible area; `lerp()` moves the camera smoothly toward the player each frame; `translate(-camX, -camY)` shifts all world drawing into screen coordinates
-- **`push()` / `pop()` around translate** — everything inside draws in world coordinates; HUD and minimap are drawn after `pop()` in screen coordinates so they stay fixed on screen
-- **`loadJSON()`** — loads `data/enemies.json` in `preload()`; wave trigger positions, enemy speeds, and boss data all stored in one file
-- **Position-based wave triggers** — each wave has a `spawnAt` world Y value; `checkWaveSpawns()` compares `player.y` against each threshold; when the player moves above it the wave spawns
-- **Boss zone** — a glowing area at the top of the world; entering it calls `spawnBoss()` which builds the boss object from JSON data and switches to `STATE_BOSS`
-- **Boss state machine** — cycles through `"pausing"`, `"charging"`, `"retreating"`; charges at the player, overshoots, retreats to the top centre, pauses, repeats
-- **Minimap** — drawn in screen coordinates after `pop()`; uses `map()` to convert world positions to minimap positions; shows player (teal), enemies (orange), boss (red), and a camera viewport rectangle
-- **Two `lerpColor()` bars** — player health shifts green→red; boss health shifts orange→red
-- **Sound hooks** — all sound calls are commented out; hooks for shoot, hit, player hit, boss hit, boss music transition, and win
-- **B key** — skips directly to the boss fight for testing; calls `spawnBoss()` and moves the player into the boss zone
+## Description
+(Overview of game concept, mechanics, and player experience)
+
+## Design Rationale (250 words or less)
+How affordances guide player understanding and interaction.
+**Involuntary State-shfiting**
+2D Human form
+- An upright posture with 2 distinct legs and a grounded stance implies a familiar baseline of control where the player is bound to the floor unless actively jumping
+
+Bird Form
+- The visual cue of wings, and lack of contact with the ground implies airborn mobility and high velocity
+- The wind current into the transition from the player to the bird indicates that the player will be exploring with a mechanic that does not involve being on the ground
+
+Fish Form
+- The visual cue of the character turning into a fish and the sudden drop in movement speed implies gravity-driven sinking
+- The stamina bar that appeared beside the fish implies that the fish would eventually run out of energy, needing time to recharge
+
+How GameFlow principles support learning and engagement.
+- Concentration: The game is well paced and avoids any unecessary elements to maintain attention
+- Challenge: The player needs to learn mechanics and gradually be able to apply them to different situations of gettings the runes and making past obstacles
+- Player Skill: There is space for players to play around with/practice the mechanic of their form before advancing to harder areas
+- Control: WASD
+- Clear goals: There has always been one goal (which is to collect all the runes and go through the portal). The map is also confined so that there is one key path to move forwards
+- Feedback: Each time the player collects a rune, the rune counter will increase visibly towards a total rune count, indicating that the player is making progress
+- Immersion: 
+- Social: 
+
+How the disability is integrated into the design.
+Focus on specific design decisions from your game (not general definitions).
+We integrated the disability (bipolar) into the core mechanics of the game. By forcing the player through state changes, they must navigate that state's altered movement that mimics different mindstates of the disability. For example, the bird represents a mania state with the high speed and chaotic gameplay, demonstrating impulsivity, high energy, and the hyper-activity of the manic state. The fish represents the depression state through the slow and sinking gameplay, demonstrating exhaustion and low motivation.
 
 ## Setup and Interaction Instructions
-
+(How to run and play the game)
 To run the sketch locally, open `index.html` in Google Chrome using Live Server.
 
 **Controls:**
 - Move: WASD
-- Shoot: Spacebar (shoots in the direction you last moved)
-- B: Skip to boss fight (testing only)
-- Restart: R (after win or game over)
-
-Explore the world, survive enemy waves as you move north, then enter the glowing boss zone to fight the giant orange blob. Watch the minimap to track enemies off screen.
-
-**Adding Your Own Sounds**
-1. Add your sound files to `assets/sounds/`
-2. In `preload()`, uncomment the `loadSound()` lines and update the file paths
-3. Uncomment the `play()` or `loop()` calls in the relevant functions — there are hooks for the boss music transition too
-
-**Editing the Waves and Boss**
-Open `data/enemies.json` to change when waves spawn, how many enemies appear, their speed, and the boss stats. Each wave has a `spawnAt` world Y value — lower values trigger later since the player starts at the bottom of the world.
+- A and D to move left right
+- D to move down
+- W to jump/flap/swim up
 
 **Opening the Chrome Console**
 - **Windows:** Press `F12` or `Ctrl + Shift + J`, then click the **Console** tab
 - **Mac:** Press `Cmd + Option + J`
+
+## Iteration Notes
+Post-Playtest: 3 changes made based on playtesting
+Post-Showcase: 2 planned improvements if you were to continue iterating the game
 
 ## Assets
 

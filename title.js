@@ -41,14 +41,8 @@ function draw() {
 }
 
 function mousePressed() {
-  // Check if click is on the red button
   if (mouseX > 375 && mouseX < 425 && mouseY > 260 && mouseY < 300) {
-    
-    // Load sketch.js
-    let newScript = document.createElement('script');
-    newScript.src = 'sketch.js';
-    document.body.appendChild(newScript);
-    return false;
+    window.location.href = 'game.html';
   }
 }
 
