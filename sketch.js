@@ -31,8 +31,10 @@ const FISH_SPRITE = {
 
   // Row mapping: row 0 is left, row 1 is right
   rows: {
-    left: 1,
+    down:  2,
+    up:    3,
     right: 0,
+    left:  1,
   },
 };
 
@@ -69,6 +71,18 @@ const BIRD_SPRITE = {
   },
 };
 
+const RUNE_SPRITE = {
+  frameWidth: 620,
+  frameHeight: 600,
+  numFrames: 10,
+  animSpeed: 7,
+  scale: 0.13, // tune this to fit TILE_SIZE
+};
+
+let runeFrame = 0;
+let runeTimer = 0;
+let runeSheet;
+
 const GRAVITY = 0.6; // 4.0  bird gravity? Calibrated downward pull
 const GRAVITY_AFTER_CHECKPOINT = GRAVITY * 1; // 60% of normal gravity after first checkpoint
 const FLAP_FORCE = -8; // -24 // Gives the exact velocity curve to hit 3 blocks high
@@ -90,12 +104,19 @@ const FISH_WATER_DRAG = 0.88;
 
 const TILE_SIZE = 50;
 
+const FORM_HUMAN = "human";
+const FORM_BIRD = "bird";
+const FORM_FISH = "fish";
+const FORM_ORDER = [FORM_HUMAN, FORM_BIRD, FORM_FISH]; // defines forward-only progression
+
 let player = {
-  x: 10 * TILE_SIZE, //405
-  y: 10 * TILE_SIZE, // for start
+  x: 290 * TILE_SIZE,
+  y: 40 * TILE_SIZE, // 17 for start
   vy: 1,
   vx: 0,
-  r: 15, //22
+  r: 15,
+  form: FORM_HUMAN,
+  windTimer: 0, // ADDED — tracks frames spent inside a wind zone
 
   //fish stuff
   stamina: 100, // ← add this
@@ -120,8 +141,9 @@ let player = {
 };
 
 const WIND_FORCE = -1.5; // stronger upward push = more negative
-const WIND_MAX_UP = -12; // caps upward speed
-
+const WIND_MAX_UP = -9; // caps upward speed
+const WIND_DELAY_FRAMES = 25; // how long you free-fall before wind kicks in
+const WIND_RAMP_FRAMES = 20; // how long it takes wind to reach full strength
 let windZones = [];
 
 // ------------------------------------------------------------
@@ -159,13 +181,22 @@ let spike2Img;
 let spike3Img;
 let spike4Img;
 let waterSurfaceImg;
+let portalClosedImg;
+let portalOpenImg;
 
 let fishareaBG;
 let fishareaOverlay;
 let cavebg;
+let endbg;
 
 let fishSheet; //fish sprite sheet
 let birdSheet; //bird sprite sheet
+
+let diesound;
+let runesound;
+let walkingsound;
+let flappingsound;
+let fishareasound;
 
 // ------------------------------------------------------------
 // ADDED — TILE PHYSICS
@@ -221,15 +252,18 @@ function preload() {
   grassImg = loadImage("assets/grass.png");
   groundImg = loadImage("assets/ground.png");
   barkImg = loadImage("assets/bark.png");
+
   seaweedImg = loadImage("assets/seaweed.png");
   sandImg = loadImage("assets/sand.png");
   sandrockImg = loadImage("assets/sandrock.png");
+
   rockImg = loadImage("assets/rock.png");
   bgRockImg = loadImage("assets/bgrock.jpg");
   spike1Img = loadImage("assets/spike1.png");
   spike2Img = loadImage("assets/spike2.png");
   spike3Img = loadImage("assets/spike3.png");
   spike4Img = loadImage("assets/spike4.png");
+
   waterSurfaceImg = loadImage("assets/watersurface.png");
   fishareaBG = loadImage("assets/fishareaBG.jpg");
   fishareaOverlay = loadImage("assets/fishareaoverlay.png");
@@ -237,6 +271,15 @@ function preload() {
   birdSheet = loadImage("assets/bird.png");
   humanSheet = loadImage("assets/human.png");
   whirlpoolImg = loadImage("assets/whirlpool.png");
+  runeSheet = loadImage("assets/runes.png");
+
+  endbg = loadImage("assets/endareabg.png");
+
+  diesound = loadSound("assets/sounds/die.mp3");
+  runesound = loadSound("assets/sounds/rune.mp3");
+  walkingsound = loadSound("assets/sounds/walking.mp3");
+  flappingsound = loadSound("assets/sounds/flappingbird.mp3");
+  fishareasound = loadSound("assets/sounds/fisharea.mp3");
 }
 
 // ============================================================
@@ -260,7 +303,7 @@ function setup() {
   console.log("birdArea=", birdArea);
 
   FISH_SPRITE.frameWidth = fishSheet.width / 2;
-  FISH_SPRITE.frameHeight = fishSheet.height / 2;
+  FISH_SPRITE.frameHeight = fishSheet.height / 4;
 
   HUMAN_SPRITE.frameWidth = humanSheet.width / HUMAN_SPRITE.numFrames;
   HUMAN_SPRITE.frameHeight = humanSheet.height / 2;
@@ -275,12 +318,28 @@ function setup() {
   // and group checkpoint tiles into discrete zones.
   buildTileCollision();
 
-  windZones.push({
-    x: TILE_SIZE * startArea.mapWidth - 470,
-    y: 0,
-    w: 13 * TILE_SIZE,
-    h: birdArea.mapHeight * TILE_SIZE,
-  });
+  // Zone 1: human -> bird (has an actual ceiling — cave roof)
+windZones.push({
+  x: TILE_SIZE * (startArea.mapWidth - 2),
+  y: 0,
+  w: 13 * TILE_SIZE,
+  h: birdArea.mapHeight * TILE_SIZE,
+  fromForm: FORM_HUMAN,
+  transformTo: FORM_BIRD,
+  hasCeiling: true, // ADDED
+});
+
+// Zone 2: fish -> human (launch zone, no ceiling — fixed y offset too)
+const fishAreaOffsetY = TILE_SIZE * birdArea.mapHeight; // ✅ correct offset
+windZones.push({
+  x: TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37 + fishArea.mapWidth - 6),
+  y: fishAreaOffsetY,
+  w: 6 * TILE_SIZE,
+  h: (fishArea.mapHeight + endArea.mapHeight) * TILE_SIZE,
+  fromForm: FORM_FISH,
+  transformTo: FORM_HUMAN,
+  hasCeiling: false, // ADDED
+});
 
   // ADDED — remember the player's starting point as the fallback
   // respawn location for before any checkpoint has been reached.
@@ -294,9 +353,6 @@ function setup() {
   // music.loop();
 }
 
-// ============================================================
-// draw()
-// ============================================================
 function getAreaWorldBounds(jsonFile) {
   if (jsonFile === startArea) {
     return {
@@ -318,7 +374,7 @@ function getAreaWorldBounds(jsonFile) {
 
   if (jsonFile === fishArea) {
     return {
-      x: TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 33),
+      x: TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37),
       y: TILE_SIZE * birdArea.mapHeight,
       w: fishArea.mapWidth * TILE_SIZE,
       h: fishArea.mapHeight * TILE_SIZE,
@@ -388,11 +444,11 @@ function draw() {
 
   // Everything inside push/pop is drawn in world coordinates
   push();
-  let screenOffsetX = Math.round(width / 2 * (1 - camZoom) - camX * camZoom);
-let screenOffsetY = Math.round(height / 2 * (1 - camZoom) - camY * camZoom);
+  let screenOffsetX = Math.round((width / 2) * (1 - camZoom) - camX * camZoom);
+  let screenOffsetY = Math.round((height / 2) * (1 - camZoom) - camY * camZoom);
 
-translate(screenOffsetX, screenOffsetY);
-scale(camZoom);
+  translate(screenOffsetX, screenOffsetY);
+  scale(camZoom);
   if (shouldDrawArea(startArea)) {
     drawTiles(startArea);
   }
@@ -412,12 +468,25 @@ scale(camZoom);
   if (gameState === STATE_PLAY) {
     updateMoveSpeed();
     handleInput();
+    updateWalkingSound(); 
+    updateFlappingSound(); 
+    updateFishAreaSound(); // NEW
+
     checkWindZones();
+    checkWaterTransform(); 
+    enforceLocationForm(); 
+
 
     whirlpoolTimer++;
     if (whirlpoolTimer >= WHIRLPOOL_SPRITE.animSpeed) {
       whirlpoolTimer = 0;
       whirlpoolFrame = (whirlpoolFrame + 1) % WHIRLPOOL_SPRITE.numFrames;
+    }
+
+    runeTimer++;
+    if (runeTimer >= RUNE_SPRITE.animSpeed) {
+      runeTimer = 0;
+      runeFrame = (runeFrame + 1) % RUNE_SPRITE.numFrames;
     }
 
     // ADDED — tile physics: solid blockage, hazards, checkpoints
@@ -427,12 +496,13 @@ scale(camZoom);
     checkHazardCollisions();
     checkCheckpoints();
 
+    animateCharacter();
     drawPlayer();
 
     // ADDED: draw fish area overlay on top of everything (world coordinates)
     if (fishareaOverlay) {
       const fishAreaOffsetX =
-        TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 33);
+        TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37);
       const fishAreaOffsetY = TILE_SIZE * birdArea.mapHeight;
       image(fishareaOverlay, fishAreaOffsetX, fishAreaOffsetY, 1900, 800);
     }
@@ -466,7 +536,28 @@ function drawKeyHUD() {
   pop();
 }
 
+// ------------------------------------------------------------
+// tryTransform()
+// Each wind zone declares its own fromForm/transformTo. No
+// forward-only restriction anymore, since the pipeline is a loop:
+// human -> bird -> fish -> human.
+// ------------------------------------------------------------
+function tryTransform(zone) {
+  if (player.form === zone.fromForm) {
+    // Special case: don't let fish become human while still submerged —
+    // wait until the wind has actually launched them out of the water.
+    if (zone.fromForm === FORM_FISH && zone.transformTo === FORM_HUMAN) {
+      if (playerInWater()) return;
+    }
+    
+    player.form = zone.transformTo;
+    console.log("Transformed into:", player.form);
+  }
+}
+
 function checkWindZones() {
+  let inAnyZone = false;
+
   for (const z of windZones) {
     const inside =
       player.x + player.r > z.x &&
@@ -475,29 +566,132 @@ function checkWindZones() {
       player.y - player.r < z.y + z.h;
 
     if (inside) {
-      const ceilingBuffer = 4 * TILE_SIZE; // floats 4 blocks below ceiling
-      const targetY = z.y + ceilingBuffer;
+      inAnyZone = true;
+      player.windTimer++;
+      tryTransform(z);
 
-      if (player.y > targetY) {
-        player.vy += WIND_FORCE;
-        player.vy = max(player.vy, WIND_MAX_UP);
-      } else {
-        player.vy = max(player.vy, 0.5); // gently stops upward movement
+      if (player.windTimer > WIND_DELAY_FRAMES) {
+        const rampProgress = min(
+          (player.windTimer - WIND_DELAY_FRAMES) / WIND_RAMP_FRAMES,
+          1,
+        );
+        const currentForce = WIND_FORCE * rampProgress;
+        const currentMaxUp = WIND_MAX_UP * rampProgress;
+
+        if (z.hasCeiling) {
+          // Zone 1 style: hover below an actual ceiling.
+          const ceilingBuffer = 7 * TILE_SIZE;
+          const targetY = z.y + ceilingBuffer;
+
+          if (player.y > targetY) {
+            player.vy += currentForce;
+            player.vy = max(player.vy, currentMaxUp);
+          } else {
+            player.vy = max(player.vy, 0.5);
+          }
+        } else {
+          // Launch zone: just keep pushing up, no hover point.
+          player.vy += currentForce;
+          player.vy = max(player.vy, currentMaxUp);
+        }
       }
 
       player.isMoving = true;
     }
   }
+
+  if (!inAnyZone) {
+    player.windTimer = 0;
+  }
 }
+
+// ------------------------------------------------------------
+// checkWaterTransform()
+// Bird -> fish is triggered by touching water directly.
+// ------------------------------------------------------------
+function checkWaterTransform() {
+  if (player.form === FORM_BIRD && playerInWater()) {
+    player.form = FORM_FISH;
+    console.log("Transformed into:", player.form);
+  }
+}
+
+function updateWalkingSound() {
+  if (!walkingsound) return;
+
+  const shouldPlay = player.form === FORM_HUMAN && player.isMoving;
+
+  if (shouldPlay) {
+    if (!walkingsound.isPlaying()) {
+      walkingsound.loop();
+    }
+  } else {
+    if (walkingsound.isPlaying()) {
+      walkingsound.stop();
+    }
+  }
+}
+
+// ------------------------------------------------------------
+// updateFishAreaSound()
+// Loops fisharea.mp3 whenever the player is submerged in water,
+// regardless of form. Stops the instant they surface/leave water.
+// ------------------------------------------------------------
+function updateFishAreaSound() {
+  if (!fishareasound) return; // use whatever variable name you declared
+
+  const shouldPlay = playerInWater();
+
+  if (shouldPlay) {
+    if (!fishareasound.isPlaying()) {
+      fishareasound.loop();
+    }
+  } else {
+    if (fishareasound.isPlaying()) {
+      fishareasound.stop();
+    }
+  }
+}
+
+// ------------------------------------------------------------
+// updateFlappingSound()
+// Loops flappingbird.mp3 while the player is in bird form AND
+// physically within the bird area's x-range. Stops the
+// instant they leave bird form or leave the bird area bounds.
+// ------------------------------------------------------------
+function updateFlappingSound() {
+  if (!flappingsound) return;
+
+  const birdBounds = getAreaWorldBounds(birdArea);
+  const inBirdArea =
+    player.x >= birdBounds.x && player.x < birdBounds.x + birdBounds.w;
+
+  const isFlapping = keyIsDown(87); // upward
+  const shouldPlay =
+    player.form === FORM_BIRD &&
+    inBirdArea &&
+    (player.isMoving || isFlapping); // forward/backward/upward
+
+  if (shouldPlay) {
+    if (!flappingsound.isPlaying()) {
+      flappingsound.loop();
+    }
+  } else {
+    if (flappingsound.isPlaying()) {
+      flappingsound.stop();
+    }
+  }
+}
+
 
 // ------------------------------------------------------------
 // animateCharacter() — Dynamic state animation processing
 // ------------------------------------------------------------
 function animateCharacter() {
-  let inSea = playerInWater();
-  let inStart = player.x < TILE_SIZE * startArea.mapWidth;
+  let inSea = player.form === FORM_FISH;
+  let inStart = player.form === FORM_HUMAN;
 
-  if (inStart) {
+  if (player.form === FORM_HUMAN) {
     if (player.isMoving) {
       player.frameTimer++;
       if (player.frameTimer >= HUMAN_SPRITE.animSpeed) {
@@ -509,19 +703,7 @@ function animateCharacter() {
       player.currentFrame = 0;
       player.frameTimer = 0;
     }
-  } else if (inSea) {
-    // Fish animation (unchanged)
-    if (player.isMoving) {
-      player.frameTimer++;
-      if (player.frameTimer >= FISH_SPRITE.animSpeed) {
-        player.frameTimer = 0;
-        player.currentFrame = (player.currentFrame + 1) % FISH_SPRITE.numFrames;
-      }
-    } else {
-      player.currentFrame = 0;
-      player.frameTimer = 0;
-    }
-  } else {
+  } else if (player.form === FORM_BIRD) {
     // Bird animation (unchanged)
     let isFlapping = keyIsDown(87);
     let currentAnimMode = isFlapping ? "flying" : "running";
@@ -536,6 +718,50 @@ function animateCharacter() {
       player.currentFrame = 0;
       player.frameTimer = 0;
     }
+  } else if (player.form === FORM_FISH) {
+    // Fish animation (unchanged)
+    if (player.isMoving) {
+      player.frameTimer++;
+      if (player.frameTimer >= FISH_SPRITE.animSpeed) {
+        player.frameTimer = 0;
+        player.currentFrame = (player.currentFrame + 1) % FISH_SPRITE.numFrames;
+      }
+    } else {
+      player.currentFrame = 0;
+      player.frameTimer = 0;
+    }
+  }
+}
+
+// let inSea = playerInWater();
+// let inStart = player.x < TILE_SIZE * startArea.mapWidth;
+
+
+function enforceLocationForm() {
+  // Touching water always means fish — overrides everything else.
+  if (playerInWater()) {
+    if (player.form !== FORM_FISH) {
+      player.form = FORM_FISH;
+    }
+    return;
+  }
+
+const endBounds = getAreaWorldBounds(endArea);
+  const inEndArea =
+    player.x >= endBounds.x && player.x < endBounds.x + endBounds.w &&
+    player.y >= endBounds.y && player.y < endBounds.y + endBounds.h;
+
+  if (inEndArea) return; // ADDED — end area has no forced form
+
+  const birdMinX = TILE_SIZE * startArea.mapWidth;
+  const birdMaxX = birdMinX + TILE_SIZE * birdArea.mapWidth;
+  const birdMaxY = TILE_SIZE * birdArea.mapHeight;
+
+  const inBirdAreaBounds =
+    player.x >= birdMinX && player.x < birdMaxX && player.y < birdMaxY;
+
+  if (inBirdAreaBounds && player.form !== FORM_BIRD) {
+    player.form = FORM_BIRD;
   }
 }
 
@@ -672,7 +898,7 @@ function buildTileCollision() {
 
   // Process layers from fishArea with world offsets
   const fishAreaOffsetX =
-    TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 33);
+    TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37);
   const fishAreaOffsetY = TILE_SIZE * birdArea.mapHeight;
   processJsonLayers(
     fishArea,
@@ -952,6 +1178,14 @@ function findClosestPassedCheckpoint(px, py) {
 // Respawns at the nearest passed checkpoint or start.
 // ------------------------------------------------------------
 function respawnFromHazard() {
+  if (diesound) diesound.play();
+   if (walkingsound && walkingsound.isPlaying()) walkingsound.stop(); 
+  if (flappingsound && flappingsound.isPlaying()) flappingsound.stop(); 
+  if (fishareamp3 && fishareamp3.isPlaying()) fishareamp3.stop(); // NEW
+
+
+
+
   const spawn =
     findClosestPassedCheckpoint(player.x, player.y) ||
     lastCheckpoint ||
@@ -987,6 +1221,9 @@ function checkKeys() {
     if (d < player.r + TILE_SIZE * 0.35) {
       keyMap.set(mapKey, true);
       keyCollected++;
+
+      if (runesound) runesound.play(); // NEW — plays on every key pickup
+
       if (keyCollected >= keyTotal) {
         allKeysCollected = true;
         gameState = STATE_WIN;
@@ -1028,8 +1265,10 @@ function checkWhirlpools() {
 }
 
 function updateMoveSpeed() {
-  if (playerInWater()) {
-    moveSpeed = playerInSeaweed() ? 4 / SEAWEED_SLOW_FACTOR : 4;
+  if (player.form === FORM_FISH) {
+    moveSpeed = playerInWater()
+      ? (playerInSeaweed() ? 4 / SEAWEED_SLOW_FACTOR : 4)
+      : 6; // airborne/launched fish — pick a value that feels right
   } else {
     moveSpeed = PLAYER_SPEED;
   }
@@ -1101,7 +1340,7 @@ function drawTiles(jsonFile) {
         mapYOffset = 0;
       }
       if (jsonFile == fishArea) {
-        mapXOffset = TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 33);
+        mapXOffset = TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37);
         mapYOffset = TILE_SIZE * birdArea.mapHeight;
       }
 
@@ -1119,20 +1358,17 @@ function drawTiles(jsonFile) {
     }
   }
   if (jsonFile === startArea && startbg) {
-    image(
-      startbg,
-      0,
-      0,
-      startArea.mapWidth * TILE_SIZE,
-      startArea.mapHeight * TILE_SIZE,
-    );
+    image(startbg, 0, 0, 3550, startArea.mapHeight * TILE_SIZE);
   }
   // Draw background image for fish area after water but before other tiles
   if (jsonFile === fishArea && fishareaBG) {
     const fishAreaOffsetX =
-      TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 33);
+      TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37);
     const fishAreaOffsetY = TILE_SIZE * birdArea.mapHeight;
     image(fishareaBG, fishAreaOffsetX, fishAreaOffsetY, 1900, 800);
+  }
+  if (jsonFile === endArea && endbg) {
+    image(endbg, TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth), TILE_SIZE * (birdArea.mapHeight - endArea.mapHeight), endArea.mapWidth * TILE_SIZE, endArea.mapHeight * TILE_SIZE);
   }
 
   // Second pass: draw all non-water layers
@@ -1169,11 +1405,12 @@ function drawTiles(jsonFile) {
   }
 
   for (let l = layers.length - 1; l > -1; l--) {
-    const layer = layers[l];
-    if (layer.name === "water") continue;
-    if (jsonFile === birdArea && layer.name === "bg green") continue;
-    if (jsonFile === startArea && layer.name === "background sky") continue; // ADD THIS
-
+  const layer = layers[l];
+  if (layer.name === "water") continue;
+  if (layer.name === "bg green") continue;      // ✅ now applies everywhere
+  if (layer.name === "background") continue;     // ✅ now applies everywhere
+  if (layer.name === "background sky") continue; // from earlier fix
+  
     let spikePositions = null;
     if (jsonFile === birdArea && layer.name === "spikes") {
       spikePositions = new Set(
@@ -1199,7 +1436,7 @@ function drawTiles(jsonFile) {
         mapYOffset = 0;
       }
       if (jsonFile === fishArea) {
-        mapXOffset = TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 33);
+        mapXOffset = TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37);
         mapYOffset = TILE_SIZE * birdArea.mapHeight;
       }
 
@@ -1221,10 +1458,26 @@ function drawTiles(jsonFile) {
       }
 
       if (layer.name === KEY_LAYER) {
-        fill(tileColor(layer.name, t.id));
-        // simple key silhouette: circle head + small shaft, swap for a sprite later
-        ellipse(x + TILE_SIZE / 2, y + TILE_SIZE * 0.4, TILE_SIZE * 0.35);
-        rect(x + TILE_SIZE / 2 - 3, y + TILE_SIZE * 0.5, 6, TILE_SIZE * 0.3);
+        if (runeSheet) {
+          let sx = runeFrame * RUNE_SPRITE.frameWidth;
+          let sy = 0;
+          let dw = RUNE_SPRITE.frameWidth * RUNE_SPRITE.scale;
+          let dh = RUNE_SPRITE.frameHeight * RUNE_SPRITE.scale;
+          push();
+          imageMode(CENTER);
+          image(
+            runeSheet,
+            x + TILE_SIZE / 2,
+            y + TILE_SIZE / 2,
+            dw,
+            dh,
+            sx,
+            sy,
+            RUNE_SPRITE.frameWidth,
+            RUNE_SPRITE.frameHeight,
+          );
+          pop();
+        }
       } else if (layer.name === WHIRLPOOL_LAYER) {
         if (whirlpoolImg) {
           let frameW = whirlpoolImg.width / WHIRLPOOL_SPRITE.numFrames;
@@ -1484,21 +1737,6 @@ function applyBounce() {
 }
 
 // ------------------------------------------------------------
-// drawBackground()
-// Draws background shapes in world coordinates.
-// ------------------------------------------------------------
-function drawBackground() {
-  noStroke();
-
-  // World boundary outline
-  noFill();
-  stroke(60, 50, 80);
-  strokeWeight(4);
-  rect(0, 0, WORLD_W, WORLD_H);
-  noStroke();
-}
-
-// ------------------------------------------------------------
 // handleInput()
 // WASD moves the player in world coordinates.
 // Constrained to world boundaries.
@@ -1509,63 +1747,46 @@ function drawBackground() {
 // ------------------------------------------------------------
 function handleInput() {
   player.isMoving = false;
-  let inSea = playerInWater();
-  let inStart = player.x < TILE_SIZE * startArea.mapWidth;
 
   // --- Horizontal Movement ---
-  if (keyIsDown(65)) {
-    player.x -= inStart ? HUMAN_SPEED : moveSpeed;
-    player.facing = "left";
-    player.isMoving = true;
-  }
-  if (keyIsDown(68)) {
-    player.x += inStart ? HUMAN_SPEED : moveSpeed;
-    player.facing = "right";
-    player.isMoving = true;
+  if (player.form === FORM_HUMAN) {
+    if (keyIsDown(65)) { player.x -= HUMAN_SPEED; player.facing = "left"; player.isMoving = true; }
+    if (keyIsDown(68)) { player.x += HUMAN_SPEED; player.facing = "right"; player.isMoving = true; }
+  } else {
+    if (keyIsDown(65)) { player.x -= moveSpeed; player.facing = "left"; player.isMoving = true; }
+    if (keyIsDown(68)) { player.x += moveSpeed; player.facing = "right"; player.isMoving = true; }
   }
 
-  // --- Vertical Movement (Context Dependent) ---
-  if (inSea) {
-    // --- Passive sink ---
+  // --- Vertical Movement (form-based, not area-based) ---
+  if (player.form === FORM_FISH) {
     player.vy += FISH_SINK_FORCE;
-
-    // --- Stamina regen when not pressing up ---
     if (!keyIsDown(87)) {
-      player.stamina = min(
-        player.stamina + FISH_STAMINA_REGEN,
-        FISH_STAMINA_MAX,
-      );
+        player.stamina = min(player.stamina + FISH_STAMINA_REGEN, FISH_STAMINA_MAX);
     }
-
-    // --- Flap: only triggers on fresh keypress, not held ---
-    // (handled in keyPressed, sets a flapQueued flag)
     if (player.flapQueued && player.stamina >= FISH_STAMINA_COST) {
-      player.flapVelocity = -FISH_FLAP_FORCE; // burst upward
-      player.stamina -= FISH_STAMINA_COST;
-      player.flapQueued = false;
-      player.isMoving = true;
+        player.flapVelocity = -FISH_FLAP_FORCE;
+        player.stamina -= FISH_STAMINA_COST;
+        player.flapQueued = false;
+        player.isMoving = true;
+        player.facing = "up"; // ADD
     } else {
-      player.flapQueued = false; // cancel queued flap if no stamina
+        player.flapQueued = false;
     }
-
-    // --- Decay the flap burst so each tap only gives a short push ---
     player.flapVelocity *= 1 - FISH_FLAP_DECAY;
-
-    // --- Combine into vy ---
     player.vy += player.flapVelocity;
-
-    // --- Down is easy and holdable ---
     if (keyIsDown(83)) {
-      player.vy += FISH_SWIM_DOWN;
-      player.isMoving = true;
+        player.vy += FISH_SWIM_DOWN;
+        player.isMoving = true;
+        player.facing = "down"; // ADD
     }
+    // Reset to left/right when moving horizontally
+    if (keyIsDown(65)) player.facing = "left";
+    if (keyIsDown(68)) player.facing = "right";
 
     player.vy *= FISH_WATER_DRAG;
     player.vx *= FISH_WATER_DRAG;
-
-    player.vy = constrain(player.vy, -8, 6); // asymmetric: harder cap going up
+    player.vy = constrain(player.vy, -8, 6);
     player.vx = constrain(player.vx, -moveSpeed, moveSpeed);
-
     player.x += player.vx;
     player.y += player.vy;
   } else {
@@ -1573,25 +1794,17 @@ function handleInput() {
     const currentGravity =
       activeCheckpointIndex >= 0 ? GRAVITY_AFTER_CHECKPOINT : GRAVITY;
 
-    if (inStart) {
-      player.vy += HUMAN_GRAVITY;
-    } else {
-      player.vy += currentGravity;
-    }
-
+    player.vy += player.form === FORM_HUMAN ? HUMAN_GRAVITY : currentGravity;
     player.vy = constrain(player.vy, -TERMINAL_VELOCITY, TERMINAL_VELOCITY);
     player.y += player.vy;
 
-    if (!inStart) {
-      if (keyIsDown(87)) {
-        player.vy = FLAP_FORCE;
-      }
+    if (player.form === FORM_BIRD && keyIsDown(87)) {
+      player.vy = FLAP_FORCE;
     }
 
     player.isGrounded = false;
   }
 
-  // Constrain to world bounds
   player.x = constrain(player.x, player.r, WORLD_W - player.r);
   player.y = constrain(player.y, player.r, WORLD_H - player.r);
 }
@@ -1602,9 +1815,10 @@ function handleInput() {
 function drawPlayer() {
   if (player.invincible && floor(player.invincibleTimer / 6) % 2 === 0) return;
 
-  let inSea = playerInWater();
-  let inStart = player.x < TILE_SIZE * startArea.mapWidth; // before bird area
-
+  // let inSea = playerInWater();
+  // let inStart = player.x < TILE_SIZE * startArea.mapWidth; // before bird area
+  let inSea = player.form === FORM_FISH;
+  let inStart = player.form === FORM_HUMAN;
   push();
   imageMode(CENTER);
 
@@ -1694,22 +1908,16 @@ function drawPlayer() {
 // R restarts. B skips to boss fight.
 // ------------------------------------------------------------
 function keyPressed() {
-  // Human jump — single press with cooldown
-  let inStart = player.x < TILE_SIZE * startArea.mapWidth;
   if (
     (key === "w" || key === "W" || keyCode === 87) &&
-    inStart &&
+    player.form === FORM_HUMAN &&
     player.jumpCooldown <= 0
   ) {
-    //ORIGINAL JUMPING HEIGHT = 13
     player.vy = -14;
     player.jumpCooldown = 30;
   }
 
-  // Fish flap — tap only, not holdable
-  if (keyCode === 87 && playerInWater()) {
+  if (keyCode === 87 && player.form === FORM_FISH) {
     player.flapQueued = true;
   }
-
-  // music.loop();
 }
