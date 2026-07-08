@@ -10,7 +10,7 @@
 let camX = 0;
 let camY = 0;
 const CAM_SMOOTHING = 0.5;
-let camZoom = 0.7;
+let camZoom = .9;
 
 // ------------------------------------------------------------
 // PLAYER CONFIGURATION
@@ -123,7 +123,7 @@ const FORM_FISH = "fish";
 const FORM_ORDER = [FORM_HUMAN, FORM_BIRD, FORM_FISH]; // defines forward-only progression
 
 let player = {
-  x: 4 * TILE_SIZE,
+  x: 330 * TILE_SIZE,
   y: 17 * TILE_SIZE, // 17 for start
   vy: 1,
   vx: 0,
