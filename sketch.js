@@ -200,6 +200,7 @@ let windImg;
 let portalImg;
 let bridgeImg;
 let flagImg;
+let level1MessageImg;
 
 let fishareaBG;
 let fishareaOverlay;
@@ -244,7 +245,7 @@ let portalTiles = []; // [{x,y,w,h}] portal/door tiles
 let seaweedTiles = []; // [{x,y,w,h}] world-space rects — slows the fish, doesn't block it
 const SEAWEED_LAYER = "seaweed";
 const SEAWEED_SLOW_FACTOR = 2.5; // divides moveSpeed — tune to taste for "150% slower"
-const REQUIRED_PORTAL_KEYS = 3;
+const REQUIRED_PORTAL_KEYS = 1;
 const PORTAL_LAYER = "door";
 
 // ------------------------------------------------------------
@@ -301,6 +302,7 @@ function preload() {
 
   endbg = loadImage("assets/images/endareabg.png");
   flagImg = loadImage("assets/images/flag.png");
+  level1MessageImg = loadImage("assets/images/Level1Message.png");
 
   diesound = loadSound("assets/sounds/die.mp3");
   runesound = loadSound("assets/sounds/rune.mp3");
@@ -563,6 +565,19 @@ function draw() {
   pop(); // restore screen coordinates
   drawKeyHUD();
   drawInstructions();
+  if (gameState === STATE_WIN && level1MessageImg) {
+    stopAllGameSounds();
+    drawEndScreen();
+  }
+}
+
+function drawEndScreen() {
+  push();
+  imageMode(CENTER);
+  const overlayW = min(width * 0.75, 600);
+  const overlayH = (level1MessageImg.height / level1MessageImg.width) * overlayW;
+  image(level1MessageImg, width / 2, height / 2 + 20, overlayW, overlayH);
+  pop();
 }
 
 function drawKeyHUD() {
@@ -761,6 +776,14 @@ function updateFlappingSound() {
   }
 }
 
+function stopAllGameSounds() {
+  const sounds = [walkingsound, flappingsound, fishareasound, runesound, diesound];
+  for (const s of sounds) {
+    if (s && s.isPlaying && s.isPlaying()) {
+      s.stop();
+    }
+  }
+}
 
 // ------------------------------------------------------------
 // animateCharacter() — Dynamic state animation processing
@@ -1320,6 +1343,7 @@ function checkPortalEntrance() {
     const overlapsY = player.y + player.r > t.y && player.y - player.r < t.y + t.h;
 
     if (overlapsX && overlapsY) {
+      stopAllGameSounds();
       gameState = STATE_WIN;
       console.log("Portal entered with enough runes.");
       return;
