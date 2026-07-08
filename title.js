@@ -5,8 +5,8 @@ let frameTimer = 0;
 const frameInterval = 0.6;
 
 function preload() {
-  titleFrame1 = loadImage('assets/Title frame1.png');
-  titleFrame2 = loadImage('assets/Title frame2.png');
+  titleFrame1 = loadImage('assets/images/Title frame1.png');
+  titleFrame2 = loadImage('assets/images/Title frame2.png');
 }
 
 function setup() {
@@ -19,9 +19,8 @@ function windowResized() {
 }
 
 function draw() {
-  background(0);
-
-  frameTimer += deltaTime / 1000;
+    
+    frameTimer += deltaTime / 1000;
 
   if (frameTimer >= frameInterval) {
     frameTimer = 0;
@@ -33,4 +32,23 @@ function draw() {
   } else if (currentFrame === 1 && titleFrame2) {
     image(titleFrame2, 0, 0, 800, 450);
   }
+
+  // Small red rectangle slightly beneath center
+  fill(255, 0, 0);
+  noStroke();
+  rect(375, 260, 50, 40);
+  
 }
+
+function mousePressed() {
+  // Check if click is on the red button
+  if (mouseX > 375 && mouseX < 425 && mouseY > 260 && mouseY < 300) {
+    
+    // Load sketch.js
+    let newScript = document.createElement('script');
+    newScript.src = 'sketch.js';
+    document.body.appendChild(newScript);
+    return false;
+  }
+}
+

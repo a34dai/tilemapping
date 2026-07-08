@@ -91,7 +91,7 @@ const HUMAN_GRAVITY = 0.9;
 const HUMAN_SPEED = 7;
 
 const FISH_SWIM_HORIZONTAL = 0.6; // left/right force
-const FISH_SWIM_UP = 0.1; // upward force — lower = harder to swim up
+const FISH_SWIM_UP = 0.4; // upward force — lower = harder to swim up
 const FISH_SWIM_DOWN = 0.9; // downward force — faster to sink than rise
 
 const FISH_STAMINA_MAX = 100;
@@ -110,8 +110,8 @@ const FORM_FISH = "fish";
 const FORM_ORDER = [FORM_HUMAN, FORM_BIRD, FORM_FISH]; // defines forward-only progression
 
 let player = {
-  x: 290 * TILE_SIZE,
-  y: 40 * TILE_SIZE, // 17 for start
+  x: 2 * TILE_SIZE,
+  y: 10 * TILE_SIZE, // 17 for start
   vy: 1,
   vx: 0,
   r: 15,
@@ -242,38 +242,38 @@ let gameState = STATE_PLAY;
 // ============================================================
 function preload() {
   startArea = loadJSON("data/startarea.json");
-  startbg = loadImage("assets/startbg.png");
+  startbg = loadImage("assets/images/startbg.png");
   birdArea = loadJSON("data/birdarea.json");
   fishArea = loadJSON("data/fisharea.json");
   endArea = loadJSON("data/endarea.json");
 
-  fishSheet = loadImage("assets/fish.png");
+  fishSheet = loadImage("assets/images/fish.png");
 
-  grassImg = loadImage("assets/grass.png");
-  groundImg = loadImage("assets/ground.png");
-  barkImg = loadImage("assets/bark.png");
+  grassImg = loadImage("assets/images/grass.png");
+  groundImg = loadImage("assets/images/ground.png");
+  barkImg = loadImage("assets/images/bark.png");
 
-  seaweedImg = loadImage("assets/seaweed.png");
-  sandImg = loadImage("assets/sand.png");
-  sandrockImg = loadImage("assets/sandrock.png");
+  seaweedImg = loadImage("assets/images/seaweed.png");
+  sandImg = loadImage("assets/images/sand.png");
+  sandrockImg = loadImage("assets/images/sandrock.png");
 
-  rockImg = loadImage("assets/rock.png");
-  bgRockImg = loadImage("assets/bgrock.jpg");
-  spike1Img = loadImage("assets/spike1.png");
-  spike2Img = loadImage("assets/spike2.png");
-  spike3Img = loadImage("assets/spike3.png");
-  spike4Img = loadImage("assets/spike4.png");
+  rockImg = loadImage("assets/images/rock.png");
+  bgRockImg = loadImage("assets/images/bgrock.jpg");
+  spike1Img = loadImage("assets/images/spike1.png");
+  spike2Img = loadImage("assets/images/spike2.png");
+  spike3Img = loadImage("assets/images/spike3.png");
+  spike4Img = loadImage("assets/images/spike4.png");
 
-  waterSurfaceImg = loadImage("assets/watersurface.png");
-  fishareaBG = loadImage("assets/fishareaBG.jpg");
-  fishareaOverlay = loadImage("assets/fishareaoverlay.png");
-  cavebg = loadImage("assets/cavebg.png");
-  birdSheet = loadImage("assets/bird.png");
-  humanSheet = loadImage("assets/human.png");
-  whirlpoolImg = loadImage("assets/whirlpool.png");
-  runeSheet = loadImage("assets/runes.png");
+  waterSurfaceImg = loadImage("assets/images/watersurface.png");
+  fishareaBG = loadImage("assets/images/fishareaBG.jpg");
+  fishareaOverlay = loadImage("assets/images/fishareaoverlay.png");
+  cavebg = loadImage("assets/images/cavebg.png");
+  birdSheet = loadImage("assets/images/bird.png");
+  humanSheet = loadImage("assets/images/human.png");
+  whirlpoolImg = loadImage("assets/images/whirlpool.png");
+  runeSheet = loadImage("assets/images/runes.png");
 
-  endbg = loadImage("assets/endareabg.png");
+  endbg = loadImage("assets/images/endareabg.png");
 
   diesound = loadSound("assets/sounds/die.mp3");
   runesound = loadSound("assets/sounds/rune.mp3");
@@ -339,6 +339,17 @@ windZones.push({
   fromForm: FORM_FISH,
   transformTo: FORM_HUMAN,
   hasCeiling: false, // ADDED
+});
+
+// Zone 3: end area — force fish -> human
+windZones.push({
+  x: TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth),
+  y: TILE_SIZE * (birdArea.mapHeight - endArea.mapHeight),
+  w: endArea.mapWidth * TILE_SIZE,
+  h: endArea.mapHeight * TILE_SIZE,
+  fromForm: FORM_FISH,
+  transformTo: FORM_HUMAN,
+  hasCeiling: false,
 });
 
   // ADDED — remember the player's starting point as the fallback
