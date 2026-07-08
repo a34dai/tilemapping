@@ -327,7 +327,7 @@ function preload() {
   humanBGsound = loadSound("assets/sounds/HumanBG.mp3");
   birdBGsound = loadSound("assets/sounds/birdBG.mp3");
   if (birdBGsound) {
-    birdBGsound.setVolume(0.2);
+    birdBGsound.setVolume(0.15);
   }
 }
 
