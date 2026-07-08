@@ -82,11 +82,14 @@ const RUNE_SPRITE = {
 let runeFrame = 0;
 let runeTimer = 0;
 let runeSheet;
+let runeIconImg;
 
 const WIND_SPRITE = {
-  numFrames: 14,     // adjust to match wind.png's actual frame count
-  animSpeed: 6,     // lower = faster animation
-  scale: 0.2,       // tune to fit TILE_SIZE
+  frameWidth: 0,  // set in setup()
+  frameHeight: 0, // set in setup()
+  numFrames: 14,  // confirm by counting puffs in wind.png
+  animSpeed: 6,
+  scale: 1.0,
 };
 
 let windFrame = 0;
@@ -120,8 +123,8 @@ const FORM_FISH = "fish";
 const FORM_ORDER = [FORM_HUMAN, FORM_BIRD, FORM_FISH]; // defines forward-only progression
 
 let player = {
-  x: 320 * TILE_SIZE,
-  y: 20 * TILE_SIZE, // 17 for start
+  x: 50 * TILE_SIZE,
+  y: 10 * TILE_SIZE, // 17 for start
   vy: 1,
   vx: 0,
   r: 15,
@@ -195,6 +198,8 @@ let portalClosedImg;
 let portalOpenImg;
 let windImg;
 let portalImg;
+let bridgeImg;
+let flagImg;
 
 let fishareaBG;
 let fishareaOverlay;
@@ -216,7 +221,7 @@ let fishareasound;
 // the same id number means different things on different layers.
 // Add/rename layer names here to match your map.json exactly.
 // ------------------------------------------------------------
-const SOLID_LAYERS = ["rock", "grass", "ground", "sand", "algae", "bark"]; // blocks movement CHANGE SEAWEED PROPERTES
+const SOLID_LAYERS = ["rock", "grass", "ground", "sand", "algae", "bark", "barrier"]; // blocks movement CHANGE SEAWEED PROPERTES
 const HAZARD_LAYERS = ["spikes"]; // kills on contact
 const CHECKPOINT_LAYER = "checkpoint"; // respawn points
 const KEY_LAYER = "key"; // matches the JSON layer name
@@ -280,19 +285,22 @@ function preload() {
   spike4Img = loadImage("assets/images/spike4.png");
 
   waterSurfaceImg = loadImage("assets/images/watersurface.png");
-  fishareaBG = loadImage("assets/images/fishareaBG.jpg");
+  fishareaBG = loadImage("assets/images/fishareaBG.png");
   fishareaOverlay = loadImage("assets/images/fishareaoverlay.png");
   cavebg = loadImage("assets/images/cavebg.png");
   birdSheet = loadImage("assets/images/bird.png");
   humanSheet = loadImage("assets/images/human.png");
   whirlpoolImg = loadImage("assets/images/whirlpool.png");
   runeSheet = loadImage("assets/images/runes.png");
+  runeIconImg = loadImage("assets/images/rune.png");
   portalClosedImg = loadImage("assets/images/portalclosed.png");
   portalOpenImg = loadImage("assets/images/portalopen.png");
   windImg = loadImage("assets/images/wind.png"); 
   portalImg = loadImage("assets/images/portalclosed.png");
+  bridgeImg = loadImage("assets/images/bridge.png");
 
   endbg = loadImage("assets/images/endareabg.png");
+  flagImg = loadImage("assets/images/flag.png");
 
   diesound = loadSound("assets/sounds/die.mp3");
   runesound = loadSound("assets/sounds/rune.mp3");
@@ -327,7 +335,7 @@ function setup() {
   HUMAN_SPRITE.frameWidth = humanSheet.width / HUMAN_SPRITE.numFrames;
   HUMAN_SPRITE.frameHeight = humanSheet.height / 2;
 
-  WIND_SPRITE.frameWidth = windImg.width / WIND_SPRITE.numFrames; // ADDED
+  WIND_SPRITE.frameWidth = windImg.width / WIND_SPRITE.numFrames;
   WIND_SPRITE.frameHeight = windImg.height;
 
   const tilesArray = birdArea.layers?.[0]?.tiles || [];
@@ -353,14 +361,16 @@ windZones.push({
 
 // Zone 2: fish -> human (launch zone, no ceiling — fixed y offset too)
 const fishAreaOffsetY = TILE_SIZE * birdArea.mapHeight; // ✅ correct offset
+const zone2ShiftUp = 5 * TILE_SIZE; // tune this — how many tiles higher
+
 windZones.push({
   x: TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37 + fishArea.mapWidth - 6),
-  y: fishAreaOffsetY,
+  y: fishAreaOffsetY - zone2ShiftUp,
   w: 6 * TILE_SIZE,
   h: (fishArea.mapHeight + endArea.mapHeight) * TILE_SIZE,
   fromForm: FORM_FISH,
   transformTo: FORM_HUMAN,
-  hasCeiling: false, // ADDED
+  hasCeiling: false,
 });
 
 // Zone 3: end area — force fish -> human
@@ -430,8 +440,8 @@ function shouldDrawArea(jsonFile) {
   const bounds = getAreaWorldBounds(jsonFile);
   if (!bounds) return false;
 
-  const visibleW = width / camZoom; // ~1143px at camZoom 0.7
-  const visibleH = height / camZoom; // ~643px at camZoom 0.7
+  const visibleW = width / (camZoom); // ~1143px at camZoom 0.7
+  const visibleH = height / (camZoom); // ~643px at camZoom 0.7
   const margin = 2 * TILE_SIZE; // small buffer on top of the real viewport
 
   const viewLeft = camX - margin;
@@ -440,10 +450,10 @@ function shouldDrawArea(jsonFile) {
   const viewBottom = camY + visibleH + margin;
 
   return (
-    viewRight > bounds.x &&
-    viewLeft < bounds.x + bounds.w &&
-    viewBottom > bounds.y &&
-    viewTop < bounds.y + bounds.h
+    viewRight > bounds.x - TILE_SIZE &&
+    viewLeft < bounds.x + bounds.w + TILE_SIZE &&
+    viewBottom > bounds.y - TILE_SIZE &&
+    viewTop < bounds.y + bounds.h + TILE_SIZE
   );
 }
 
@@ -518,15 +528,15 @@ function draw() {
 
     windTimer++;
     if (windTimer >= WIND_SPRITE.animSpeed) {
-      windTImer = 0;
+      windTimer = 0;
       windFrame = (windFrame + 1) % WIND_SPRITE.numFrames;
     }
 
-    //runeTimer++;
-    //if (runeTimer >= RUNE_SPRITE.animSpeed) {
-     //runeTimer = 0;
-      //runeFrame = (runeFrame + 1) % RUNE_SPRITE.numFrames;
-    //}
+    runeTimer++;
+    if (runeTimer >= RUNE_SPRITE.animSpeed) {
+     runeTimer = 0;
+      runeFrame = (runeFrame + 1) % RUNE_SPRITE.numFrames;
+    }
 
     // ADDED — tile physics: solid blockage, hazards, checkpoints
     resolveSolidCollisions();
@@ -546,7 +556,7 @@ function draw() {
       const fishAreaOffsetX =
         TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37);
       const fishAreaOffsetY = TILE_SIZE * birdArea.mapHeight;
-      image(fishareaOverlay, fishAreaOffsetX, fishAreaOffsetY, 1900, 800);
+      image(fishareaOverlay, fishAreaOffsetX, fishAreaOffsetY, fishArea.mapWidth * TILE_SIZE, 800);
     }
   }
 
@@ -568,13 +578,14 @@ function drawKeyHUD() {
   rect(x, y, boxW, boxH, 8);
 
   fill(230, 200, 80); // key gold
-  rect(x + 12, y + boxH / 2 - 7, 12, 14, 2); // simple key-shaped icon block
+  //rect(x + 12, y + boxH / 2 - 7, 12, 14, 2); // simple key-shaped icon block
+  image(runeIconImg, x + 5, y + boxH / 2 - 18, 35, 35); // overlay rock texture for visual flair
 
   fill(255);
   textSize(16);
   textFont("monospace");
   textAlign(LEFT, CENTER);
-  text(`${keyCollected} / ${keyTotal}`, x + 32, y + boxH / 2 + 1);
+  text(`${keyCollected} / ${keyTotal}`, x + 42, y + boxH / 2 + 1);
   pop();
 }
 
@@ -652,20 +663,22 @@ function drawWindZones() {
 
   const sx = windFrame * WIND_SPRITE.frameWidth;
   const sy = 0;
+  const aspect = WIND_SPRITE.frameHeight / WIND_SPRITE.frameWidth;
 
   for (const z of windZones) {
-    push();
-    imageMode(CORNER);
+    const dw = z.w;
+    const dh = dw * aspect;
 
+    push();
+    imageMode(CENTER);
     image(
       windImg,
-      z.x, z.y,      // position: top-left of the zone
-      z.w, z.h,       // size: stretched to fill the entire zone
+      z.x + z.w / 2, z.y + z.h / 2,
+      dw, dh,
       sx, sy,
       WIND_SPRITE.frameWidth,
       WIND_SPRITE.frameHeight,
     );
-
     pop();
   }
 }
@@ -1444,14 +1457,10 @@ function drawTiles(jsonFile) {
     const fishAreaOffsetX =
       TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth - 37);
     const fishAreaOffsetY = TILE_SIZE * birdArea.mapHeight;
-    image(fishareaBG, fishAreaOffsetX, fishAreaOffsetY, 1900, 800);
+    image(fishareaBG, fishAreaOffsetX, fishAreaOffsetY, 2150, 800);
   }
   if (jsonFile === endArea && endbg) {
     image(endbg, TILE_SIZE * (startArea.mapWidth + birdArea.mapWidth), TILE_SIZE * (birdArea.mapHeight - endArea.mapHeight), endArea.mapWidth * TILE_SIZE, endArea.mapHeight * TILE_SIZE);
-  }
-
-  if (jsonFile === endArea && portalImg) {
-    image(portalImg, TILE_SIZE * (14 + startArea.mapWidth + birdArea.mapWidth), TILE_SIZE * (birdArea.mapHeight - endArea.mapHeight + 3), TILE_SIZE * 2, TILE_SIZE * 3);
   }
 
   // Second pass: draw all non-water layers
@@ -1492,7 +1501,6 @@ function drawTiles(jsonFile) {
   if (layer.name === "water") continue;
   if (layer.name === "bg green") continue;      // ✅ now applies everywhere
   if (layer.name === "background") continue;     // ✅ now applies everywhere
-  if (layer.name === "background sky") continue; // from earlier fix
   
     let spikePositions = null;
     if (jsonFile === birdArea && layer.name === "spikes") {
@@ -1625,6 +1633,14 @@ function drawTiles(jsonFile) {
           fill(tileColor(layer.name, t.id));
           rect(x, y, TILE_SIZE, TILE_SIZE);
         }
+        } else if (layer.name === "background sky") {
+          fill(tileColor(layer.name, t.id));
+          rect(x, y, TILE_SIZE, TILE_SIZE);
+         } else if (layer.name === "barrier") {
+          fill(0, 0, 0, 0);
+          rect(x, y, TILE_SIZE, TILE_SIZE);
+        
+      
       } else if (layer.name === "grass") {
         if (grassImg) {
           image(grassImg, x, y, TILE_SIZE, TILE_SIZE);
@@ -1706,10 +1722,23 @@ function drawTiles(jsonFile) {
           rect(x, y, TILE_SIZE, TILE_SIZE);
         }
       } else if (layer.name === PORTAL_LAYER) {
-        const portalImg = portalUnlocked ? portalOpenImg : portalClosedImg;
+        const portalImg = keyCollected >= REQUIRED_PORTAL_KEYS ? portalOpenImg : portalClosedImg;
         if (portalImg) {
-          imageMode(CENTER);
-          image(portalImg, x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+          const portalTilesInLayer = layer.tiles;
+          const portalMinX = Math.min(...portalTilesInLayer.map((tile) => tile.x));
+          const portalMaxX = Math.max(...portalTilesInLayer.map((tile) => tile.x));
+          const portalMinY = Math.min(...portalTilesInLayer.map((tile) => tile.y));
+          const portalMaxY = Math.max(...portalTilesInLayer.map((tile) => tile.y));
+
+          const portalWorldX = portalMinX * TILE_SIZE + mapXOffset;
+          const portalWorldY = portalMinY * TILE_SIZE + mapYOffset;
+          const portalWorldW = (portalMaxX - portalMinX + 1) * TILE_SIZE;
+          const portalWorldH = (portalMaxY - portalMinY + 1) * TILE_SIZE;
+
+          imageMode(CORNER);
+          image(portalImg, portalWorldX, portalWorldY, portalWorldW, portalWorldH);
+          pop();
+          continue;
         } else {
           fill(portalUnlocked ? 80 : 40, 180, 80);
           rect(x, y, TILE_SIZE, TILE_SIZE);
@@ -1718,20 +1747,14 @@ function drawTiles(jsonFile) {
         // Flag only on the leftmost tile of each checkpoint zone
         for (const cp of checkpoints) {
           if (abs(x - cp.x) < 1 && abs(y - cp.y) < 1) {
-            stroke(180, 180, 180);
-            strokeWeight(2);
-            line(x + TILE_SIZE / 2, y, x + TILE_SIZE / 2, y - TILE_SIZE);
-            noStroke();
-            fill(220, 40, 40);
-            triangle(
-              x + TILE_SIZE / 2,
-              y - TILE_SIZE,
-              x + TILE_SIZE,
-              y - TILE_SIZE * 0.8,
-              x + TILE_SIZE / 2,
-              y - TILE_SIZE * 0.6,
-            );
-            break;
+           const flagW = TILE_SIZE * 1.2;   // tune to taste
+           const flagH = TILE_SIZE * 2.2;   // tune to taste — covers pole + flag height
+
+          push();
+          imageMode(CORNER);
+          image(flagImg, x + TILE_SIZE / 2 - flagW / 2, y - flagH, flagW, flagH);
+          pop();
+          break;
           }
         }
       } else {
