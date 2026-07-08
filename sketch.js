@@ -10,7 +10,7 @@
 let camX = 0;
 let camY = 0;
 const CAM_SMOOTHING = 0.5;
-let camZoom = .9;
+let camZoom = .8;
 
 // ------------------------------------------------------------
 // PLAYER CONFIGURATION
@@ -123,8 +123,8 @@ const FORM_FISH = "fish";
 const FORM_ORDER = [FORM_HUMAN, FORM_BIRD, FORM_FISH]; // defines forward-only progression
 
 let player = {
-  x: 330 * TILE_SIZE,
-  y: 17 * TILE_SIZE, // 17 for start
+  x: 2 * TILE_SIZE,
+  y: 10 * TILE_SIZE, // 17 for start
   vy: 1,
   vx: 0,
   r: 15,
@@ -158,6 +158,19 @@ const WIND_MAX_UP = -9; // caps upward speed
 const WIND_DELAY_FRAMES = 25; // how long you free-fall before wind kicks in
 const WIND_RAMP_FRAMES = 20; // how long it takes wind to reach full strength
 let windZones = [];
+
+// ------------------------------------------------------------
+// GATE_LAYERS
+// Maps each barrier layer name to how many runes are required
+// to open it. Add one entry per gate — as many as you have.
+// ------------------------------------------------------------
+const GATE_LAYERS = {
+  barrier1: 1,
+  barrier2: 2,
+  barrier3: 3,
+  barrier4: 4,
+};
+
 
 // ------------------------------------------------------------
 // WHIRLPOOL SPRITE CONFIGURATION
@@ -215,6 +228,8 @@ let runesound;
 let walkingsound;
 let flappingsound;
 let fishareasound;
+let humanBGsound;
+let birdBGsound;
 
 // ------------------------------------------------------------
 // ADDED — TILE PHYSICS
@@ -222,7 +237,7 @@ let fishareasound;
 // the same id number means different things on different layers.
 // Add/rename layer names here to match your map.json exactly.
 // ------------------------------------------------------------
-const SOLID_LAYERS = ["rock", "grass", "ground", "sand", "algae", "bark", "barrier"]; // blocks movement CHANGE SEAWEED PROPERTES
+const SOLID_LAYERS = ["rock", "grass", "ground", "sand", "algae", "bark", "barrier", "barrier1", "barrier2", "barrier3", "barrier4"]; // blocks movement CHANGE SEAWEED PROPERTES
 const HAZARD_LAYERS = ["spikes"]; // kills on contact
 const CHECKPOINT_LAYER = "checkpoint"; // respawn points
 const KEY_LAYER = "key"; // matches the JSON layer name
@@ -245,7 +260,7 @@ let portalTiles = []; // [{x,y,w,h}] portal/door tiles
 let seaweedTiles = []; // [{x,y,w,h}] world-space rects — slows the fish, doesn't block it
 const SEAWEED_LAYER = "seaweed";
 const SEAWEED_SLOW_FACTOR = 2.5; // divides moveSpeed — tune to taste for "150% slower"
-const REQUIRED_PORTAL_KEYS = 1;
+const REQUIRED_PORTAL_KEYS = 5;
 const PORTAL_LAYER = "door";
 
 // ------------------------------------------------------------
@@ -309,6 +324,8 @@ function preload() {
   walkingsound = loadSound("assets/sounds/walking.mp3");
   flappingsound = loadSound("assets/sounds/flappingbird.mp3");
   fishareasound = loadSound("assets/sounds/fisharea.mp3");
+  humanBGsound = loadSound("assets/sounds/HumanBG.mp3");
+  birdBGsound = loadSound("assets/sounds/birdBG.mp3");
 }
 
 // ============================================================
@@ -513,6 +530,7 @@ function draw() {
   if (gameState === STATE_PLAY) {
     updateMoveSpeed();
     handleInput();
+    updateHumanBGSound();
     updateWalkingSound(); 
     updateFlappingSound(); 
     updateFishAreaSound(); // NEW
@@ -709,6 +727,22 @@ function checkWaterTransform() {
   }
 }
 
+function updateHumanBGSound() {
+  if (!humanBGsound) return;
+
+  const shouldPlay = player.form === FORM_HUMAN;
+
+  if (shouldPlay) {
+    if (!humanBGsound.isPlaying()) {
+      humanBGsound.loop();
+    }
+  } else {
+    if (humanBGsound.isPlaying()) {
+      humanBGsound.stop();
+    }
+  }
+}
+
 function updateWalkingSound() {
   if (!walkingsound) return;
 
@@ -777,7 +811,7 @@ function updateFlappingSound() {
 }
 
 function stopAllGameSounds() {
-  const sounds = [walkingsound, flappingsound, fishareasound, runesound, diesound];
+  const sounds = [walkingsound, flappingsound, fishareasound, humanBGsound, runesound, diesound];
   for (const s of sounds) {
     if (s && s.isPlaying && s.isPlaying()) {
       s.stop();
@@ -872,7 +906,7 @@ function updateCamera() {
   let visibleH = height / camZoom;
 
   let targetX = player.x - width / 2;
-  let targetY = player.y - height / 1.5;
+  let targetY = player.y - height / 1.7;
 
   targetX = constrain(targetX, 0, WORLD_W - width);
   targetY = constrain(targetY, 0, WORLD_H - height);
@@ -952,6 +986,7 @@ function processJsonLayers(
         h: TILE_SIZE,
         tx: t.x,
         ty: t.y,
+        layerName: layer.name,
       };
       if (isSolid) solidTiles.push(rect);
       else if (isHazard) hazardTiles.push(rect);
@@ -1109,6 +1144,11 @@ function groupCheckpointTiles(tileRects) {
 // ------------------------------------------------------------
 function resolveSolidCollisions() {
   for (const t of solidTiles) {
+    const requiredKeys = GATE_LAYERS[t.layerName];
+    if (requiredKeys !== undefined && keyCollected >= requiredKeys) {
+      print ("keycollected >= required keys")
+      continue; // ADDED — this gate is open, no collision
+    }
     resolveCircleRect(player, t);
   }
 }
@@ -1745,7 +1785,16 @@ function drawTiles(jsonFile) {
           fill(tileColor(layer.name, t.id));
           rect(x, y, TILE_SIZE, TILE_SIZE);
         }
-      } else if (layer.name === PORTAL_LAYER) {
+      } else if (GATE_LAYERS[layer.name] !== undefined) {
+  const requiredKeys = GATE_LAYERS[layer.name];
+  const isOpen = keyCollected >= requiredKeys;
+
+  if (!isOpen) {
+    // Visible while locked — swap in a real sprite/texture here if you have one
+    image(sandrockImg, x, y, TILE_SIZE, TILE_SIZE);
+  }
+  // fully skip drawing once open — it's gone
+} else if (layer.name === PORTAL_LAYER) {
         const portalImg = keyCollected >= REQUIRED_PORTAL_KEYS ? portalOpenImg : portalClosedImg;
         if (portalImg) {
           const portalTilesInLayer = layer.tiles;
