@@ -123,8 +123,8 @@ const FORM_FISH = "fish";
 const FORM_ORDER = [FORM_HUMAN, FORM_BIRD, FORM_FISH]; // defines forward-only progression
 
 let player = {
-  x: 2 * TILE_SIZE,
-  y: 10 * TILE_SIZE, // 17 for start
+  x: 4 * TILE_SIZE,
+  y: 17 * TILE_SIZE, // 17 for start
   vy: 1,
   vx: 0,
   r: 15,
@@ -326,6 +326,9 @@ function preload() {
   fishareasound = loadSound("assets/sounds/fisharea.mp3");
   humanBGsound = loadSound("assets/sounds/HumanBG.mp3");
   birdBGsound = loadSound("assets/sounds/birdBG.mp3");
+  if (birdBGsound) {
+    birdBGsound.setVolume(0.2);
+  }
 }
 
 // ============================================================
@@ -531,6 +534,7 @@ function draw() {
     updateMoveSpeed();
     handleInput();
     updateHumanBGSound();
+    updateBirdBGSound();
     updateWalkingSound(); 
     updateFlappingSound(); 
     updateFishAreaSound(); // NEW
@@ -743,6 +747,22 @@ function updateHumanBGSound() {
   }
 }
 
+function updateBirdBGSound() {
+  if (!birdBGsound) return;
+
+  const shouldPlay = player.form === FORM_BIRD;
+
+  if (shouldPlay) {
+    if (!birdBGsound.isPlaying()) {
+      birdBGsound.loop();
+    }
+  } else {
+    if (birdBGsound.isPlaying()) {
+      birdBGsound.stop();
+    }
+  }
+}
+
 function updateWalkingSound() {
   if (!walkingsound) return;
 
@@ -811,7 +831,7 @@ function updateFlappingSound() {
 }
 
 function stopAllGameSounds() {
-  const sounds = [walkingsound, flappingsound, fishareasound, humanBGsound, runesound, diesound];
+  const sounds = [walkingsound, flappingsound, fishareasound, humanBGsound, birdBGsound, runesound, diesound];
   for (const s of sounds) {
     if (s && s.isPlaying && s.isPlaying()) {
       s.stop();
