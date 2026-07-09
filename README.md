@@ -107,19 +107,18 @@ Post-Showcase 2 planned improvements:
 
 ## References
 
-[1] free sound community.  wingflap_fast-2. https://pixabay.com/sound-effects/nature-wingflap-fast-2-77739/
+[1] Free Sound Community. n.d. Wingflap_fast-2. Pixabay. Retrieved July 7, 2026 from https://pixabay.com/sound-effects/nature-wingflap-fast-2-77739/
 
-[2] Sound shelf studio. UI loading end fail http://pixabay.com/sound-effects/film-special-effects-ui-loading-end-fail-522858/
+[2] Sound Shelf Studio. n.d. UI Loading End Fail. Pixabay. Retrieved July 7, 2026 from https://pixabay.com/sound-effects/film-special-effects-ui-loading-end-fail-522858/
 
-[3]  Joentnt. Walk on grass 3. https://pixabay.com/sound-effects/film-special-effects-walk-on-grass-3-291986/ 
+[3] Joentnt. n.d. Walk on Grass 3. Pixabay. Retrieved July 7, 2026 from https://pixabay.com/sound-effects/film-special-effects-walk-on-grass-3-291986/
 
-[4] Liecio. Diamond found. https://pixabay.com/sound-effects/film-special-effects-diamond-found-190255/ 
+[4] Liecio. n.d. Diamond Found. Pixabay. Retrieved July 7, 2026 from https://pixabay.com/sound-effects/film-special-effects-diamond-found-190255/
 
-[5] DRAGON STUDIO. Underwater ambience https://pixabay.com/sound-effects/nature-underwater-ambience-376890/
+[5] DRAGON-STUDIO. n.d. Underwater Ambience. Pixabay. Retrieved July 7, 2026 from https://pixabay.com/sound-effects/nature-underwater-ambience-376890/
 
-[6] Nakarada. 2020. Adventure | Royalty Free Medieval Fantasy Music. https://www.youtube.com/watch?v=7_cwKd81z7Q 
+[6] Nakarada. 2020. Adventure | Royalty Free Medieval Fantasy Music. YouTube. Retrieved July 7, 2026 from https://www.youtube.com/watch?v=7_cwKd81z7Q
 
-[7] BreakingCopyright — Royalty Free Music. 2018. Epic Battle Music (No Copyright) "Dragon Castle" by Makai-symphony https://www.youtube.com/watch?v=9gBTKiVqprE 
-
+[7] BreakingCopyright — Royalty Free Music. 2018. Epic Battle Music (No Copyright) "Dragon Castle" by Makai-symphony. YouTube. Retrieved July 7, 2026 from https://www.youtube.com/watch?v=9gBTKiVqprE
 
 
